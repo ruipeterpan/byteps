@@ -864,12 +864,35 @@ class custom_build_ext(build_ext):
             except:
                 pass
 
+        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 0))
+        if build_ucx:
+            # cmd = "mkdir -p 3rdparty/ucx; " +
+            cmd = "apt-get install build-essential libtool autoconf automake libnuma-dev;" +\
+            "rm -rf ucx*;" +\
+            "env https_proxy=10.20.47.147:3128 wget https://codeload.github.com/openucx/ucx/zip/9229f54 -O ucx.zip; " + \
+                "unzip -o ./ucx.zip -d tmp; " + \
+                "mkdir -p ucx-build; mv tmp/ucx-*/* ucx-build;" +\
+                "cd ucx-build; pwd; which libtoolize; " + \
+                "./autogen.sh; ./autogen.sh && ./contrib/configure-release --enable-mt --prefix=$PWD/../ucx && make install -j"
+            make_process = subprocess.Popen(cmd,
+                                            cwd='3rdparty',
+                                            stdout=sys.stdout,
+                                            stderr=sys.stderr,
+                                            shell=True)
+            make_process.communicate()
+            if make_process.returncode:
+                raise DistutilsSetupError('An ERROR occured while running the '
+                                          'Makefile for the ucx library. '
+                                          'Exit code: {0}'.format(make_process.returncode))
+
         if not os.path.exists("3rdparty/ps-lite/build/libps.a") or \
            not os.path.exists("3rdparty/ps-lite/deps/lib"):
             if os.environ.get('CI', 'false') == 'false':
                 make_option += "-j "
             if has_rdma_header():
                 make_option += "USE_RDMA=1 "
+            if build_ucx:
+                make_option += 'USE_UCX=1 ADD_CFLAGS="-I../ucx/include -L../ucx/lib "'
 
             make_option += pre_setup.extra_make_option()
 
