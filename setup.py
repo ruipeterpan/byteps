@@ -867,7 +867,7 @@ class custom_build_ext(build_ext):
         build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 0))
         if build_ucx:
             # cmd = "mkdir -p 3rdparty/ucx; " +
-            cmd = "apt-get install build-essential libtool autoconf automake libnuma-dev;" +\
+            cmd = "apt-get install -y build-essential libtool autoconf automake libnuma-dev unzip;" +\
             "rm -rf ucx*;" +\
             "env https_proxy=10.20.47.147:3128 wget https://codeload.github.com/openucx/ucx/zip/9229f54 -O ucx.zip; " + \
                 "unzip -o ./ucx.zip -d tmp; " + \
