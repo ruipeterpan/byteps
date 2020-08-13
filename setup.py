@@ -864,7 +864,7 @@ class custom_build_ext(build_ext):
             except:
                 pass
 
-        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 0))
+        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 1))
         if build_ucx:
             # cmd = "mkdir -p 3rdparty/ucx; " +
             cmd = "apt-get install -y build-essential libtool autoconf automake libnuma-dev unzip;" +\
