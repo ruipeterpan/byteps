@@ -53,6 +53,7 @@ def check_env():
         if env not in os.environ:
             print("The env " + env + " is missing")
             os._exit(0)
+    print(os.environ)
 
 
 def worker(local_rank, local_size, command):
