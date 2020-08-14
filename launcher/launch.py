@@ -83,6 +83,12 @@ def worker(local_rank, local_size, command):
 def launch_bps():
     print("BytePS launching " + os.environ["DMLC_ROLE"])
     sys.stdout.flush()
+    os.environ["UCX_SOCKADDR_CM_ENABLE"] = "n"
+    os.environ["UCX_TLS"] = "tcp,sockcm"
+    os.environ["UCX_SOCKADDR_TLS_PRIORITY"] = "sockcm,rdmacm"
+    os.environ["BYTEPS_UCX_ERRH_ENABLE"] = "0"
+    os.environ["DMLC_ENABLE_UCX"] = "1"
+
     check_env()
     if os.environ["DMLC_ROLE"] == "worker":
         if "NVIDIA_VISIBLE_DEVICES" in os.environ:
