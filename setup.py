@@ -873,7 +873,7 @@ class custom_build_ext(build_ext):
                 "unzip -o ./ucx.zip -d tmp; " + \
                 "mkdir -p ucx-build; mv tmp/ucx-*/* ucx-build;" +\
                 "cd ucx-build; pwd; which libtoolize; " + \
-                "./autogen.sh; ./autogen.sh && ./contrib/configure-release --enable-mt --prefix=$PWD/../ucx && make install -j"
+                "./autogen.sh; ./autogen.sh && ./contrib/configure-release --enable-mt && make install -j"
             make_process = subprocess.Popen(cmd,
                                             cwd='3rdparty',
                                             stdout=sys.stdout,
@@ -892,7 +892,7 @@ class custom_build_ext(build_ext):
             if has_rdma_header():
                 make_option += "USE_RDMA=1 "
             if build_ucx:
-                make_option += 'USE_UCX=1 ADD_CFLAGS="-I../ucx/include -L../ucx/lib "'
+                make_option += 'USE_UCX=1 '
 
             make_option += pre_setup.extra_make_option()
 
