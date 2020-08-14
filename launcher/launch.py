@@ -88,7 +88,7 @@ def launch_bps():
     os.environ["UCX_SOCKADDR_TLS_PRIORITY"] = "sockcm,rdmacm"
     os.environ["BYTEPS_UCX_ERRH_ENABLE"] = "0"
     os.environ["DMLC_ENABLE_UCX"] = "1"
-    os.environ["LD_LIBRARY_PATH"] += "/usr/lib/ucx/:"
+    os.environ["LD_LIBRARY_PATH"] += "/usr/lib/ucx/:/usr/lib/:"
 
     check_env()
     if os.environ["DMLC_ROLE"] == "worker":
