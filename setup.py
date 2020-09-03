@@ -172,6 +172,7 @@ def get_mpi_flags():
 def get_cpp_flags(build_ext):
     last_err = None
     default_flags = ['-std=c++11', '-fPIC', '-O2', '-Wall', '-fopenmp']
+    default_flags += ['-DDMLC_USE_RDMA -DDMLC_USE_UCX']
     avx_flags = ['-mf16c', '-mavx']
     flags_to_try = []
     if sys.platform == 'darwin':
@@ -208,6 +209,8 @@ def get_link_flags(build_ext):
     last_err = None
     libtool_flags = ['-Wl,-exported_symbols_list,byteps.exp']
     ld_flags = ['-Wl,--version-script=byteps.lds', '-fopenmp']
+    ld_flags += ['-DDMLC_USE_RDMA -DDMLC_USE_UCX']
+    ld_flags += ['-Wl,-rpath=/usr/lib -L/usr/lib -lucp -luct -lucs -lucm']
     flags_to_try = []
     if sys.platform == 'darwin':
         flags_to_try = [libtool_flags, ld_flags]
@@ -282,6 +285,7 @@ def get_common_options(build_ext):
     EXTRA_OBJECTS = ['3rdparty/ps-lite/build/libps.a',
                      '3rdparty/ps-lite/deps/lib/libzmq.a']
 
+    LINK_FLAGS += ['-DDMLC_USE_RDMA -DDMLC_USE_UCX']
     return dict(MACROS=MACROS,
                 INCLUDES=INCLUDES,
                 SOURCES=SOURCES,
