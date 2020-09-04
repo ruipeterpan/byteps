@@ -280,6 +280,7 @@ def get_common_options(build_ext):
     # auto-detect rdma
     if has_rdma_header():
         LIBRARIES += ['rdmacm', 'ibverbs', 'rt']
+    LIBRARIES += ['ucp', 'uct', 'ucs', 'ucm']
 
     # ps-lite
     EXTRA_OBJECTS = ['3rdparty/ps-lite/build/libps.a',
@@ -305,14 +306,17 @@ def build_server(build_ext, options):
     server_lib.extra_compile_args = options['COMPILE_FLAGS'] + \
         ['-DBYTEPS_BUILDING_SERVER']
     server_lib.extra_link_args = options['LINK_FLAGS']
+    # server_lib.extra_link_args = ['-v', '-Wl,--no-as-needed'] + server_lib.extra_link_args
     server_lib.extra_objects = options['EXTRA_OBJECTS']
     server_lib.library_dirs = options['LIBRARY_DIRS']
+    # server_lib.library_dirs += ['/usr/lib/']
 
     # auto-detect rdma
     if has_rdma_header():
         server_lib.libraries = ['rdmacm', 'ibverbs', 'rt']
     else:
         server_lib.libraries = []
+    server_lib.libraries += ['ucp', 'uct', 'ucs', 'ucm', 'dl']
 
     build_ext.build_extension(server_lib)
 
