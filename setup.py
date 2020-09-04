@@ -877,7 +877,8 @@ class custom_build_ext(build_ext):
             # cmd = "mkdir -p 3rdparty/ucx; " +
             cmd = "apt-get install -y build-essential libtool autoconf automake libnuma-dev unzip;" +\
             "rm -rf ucx*;" +\
-            "env https_proxy=10.20.47.147:3128 wget https://codeload.github.com/openucx/ucx/zip/9229f54 -O ucx.zip; " + \
+            # "env https_proxy=10.20.47.147:3128 wget https://codeload.github.com/openucx/ucx/zip/9229f54 -O ucx.zip; " + \
+            "wget https://codeload.github.com/openucx/ucx/zip/9229f54 -O ucx.zip; " + \
                 "unzip -o ./ucx.zip -d tmp; " + \
                 "mkdir -p ucx-build; mv tmp/ucx-*/* ucx-build;" +\
                 "cd ucx-build; pwd; which libtoolize; " + \
