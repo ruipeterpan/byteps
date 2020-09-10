@@ -866,7 +866,7 @@ class custom_build_ext(build_ext):
             except:
                 pass
 
-        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 0))
+        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 1))
         print("build_ucx is", build_ucx)
         if build_ucx:
             ucx_path = pre_setup.ucx_path.strip()
