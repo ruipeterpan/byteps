@@ -172,7 +172,6 @@ def get_mpi_flags():
 def get_cpp_flags(build_ext):
     last_err = None
     default_flags = ['-std=c++11', '-fPIC', '-O2', '-Wall', '-fopenmp']
-    default_flags += ['-DDMLC_USE_RDMA -DDMLC_USE_UCX']
     avx_flags = ['-mf16c', '-mavx']
     flags_to_try = []
     if sys.platform == 'darwin':
@@ -209,8 +208,6 @@ def get_link_flags(build_ext):
     last_err = None
     libtool_flags = ['-Wl,-exported_symbols_list,byteps.exp']
     ld_flags = ['-Wl,--version-script=byteps.lds', '-fopenmp']
-    ld_flags += ['-DDMLC_USE_RDMA -DDMLC_USE_UCX']
-    ld_flags += ['-Wl,-rpath=/usr/lib -L/usr/lib -lucp -luct -lucs -lucm']
     flags_to_try = []
     if sys.platform == 'darwin':
         flags_to_try = [libtool_flags, ld_flags]
@@ -286,7 +283,6 @@ def get_common_options(build_ext):
     EXTRA_OBJECTS = ['3rdparty/ps-lite/build/libps.a',
                      '3rdparty/ps-lite/deps/lib/libzmq.a']
 
-    LINK_FLAGS += ['-DDMLC_USE_RDMA -DDMLC_USE_UCX']
     return dict(MACROS=MACROS,
                 INCLUDES=INCLUDES,
                 SOURCES=SOURCES,
@@ -306,17 +302,15 @@ def build_server(build_ext, options):
     server_lib.extra_compile_args = options['COMPILE_FLAGS'] + \
         ['-DBYTEPS_BUILDING_SERVER']
     server_lib.extra_link_args = options['LINK_FLAGS']
-    # server_lib.extra_link_args = ['-v', '-Wl,--no-as-needed'] + server_lib.extra_link_args
     server_lib.extra_objects = options['EXTRA_OBJECTS']
     server_lib.library_dirs = options['LIBRARY_DIRS']
-    # server_lib.library_dirs += ['/usr/lib/']
 
     # auto-detect rdma
     if has_rdma_header():
         server_lib.libraries = ['rdmacm', 'ibverbs', 'rt']
     else:
         server_lib.libraries = []
-    server_lib.libraries += ['ucp', 'uct', 'ucs', 'ucm', 'dl']
+    server_lib.libraries += ['ucp', 'uct', 'ucs', 'ucm']
 
     build_ext.build_extension(server_lib)
 
@@ -872,12 +866,15 @@ class custom_build_ext(build_ext):
             except:
                 pass
 
-        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 1))
+        build_ucx = int(os.environ.get('BYTEPS_WITH_UCX', 0))
         if build_ucx:
-            # cmd = "mkdir -p 3rdparty/ucx; " +
+            ucx_path = pre_setup.ucx_path.strip()
+            if not ucx_path:
+                ucx_path = "https://codeload.github.com/openucx/ucx/zip/9229f54"
+            print("ucx_path is", ucx_path)
             cmd = "apt-get install -y build-essential libtool autoconf automake libnuma-dev unzip;" +\
             "rm -rf ucx*;" +\
-            "wget https://codeload.github.com/openucx/ucx/zip/9229f54 -O ucx.zip; " + \
+            "curl " + ucx_path + " -o ucx.zip; " + \
                 "unzip -o ./ucx.zip -d tmp; " + \
                 "mkdir -p ucx-build; mv tmp/ucx-*/* ucx-build;" +\
                 "cd ucx-build; pwd; which libtoolize; " + \
