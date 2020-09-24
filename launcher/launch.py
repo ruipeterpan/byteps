@@ -86,7 +86,7 @@ def launch_bps():
     os.environ["UCX_SOCKADDR_CM_ENABLE"] = "n"
     os.environ["UCX_TLS"] = "tcp,sockcm"
     os.environ["UCX_SOCKADDR_TLS_PRIORITY"] = "sockcm,rdmacm"
-    os.environ["BYTEPS_UCX_ERRH_ENABLE"] = "0"
+    os.environ["BYTEPS_UCX_ERRH_ENABLE"] = "1"
     os.environ["DMLC_ENABLE_UCX"] = "1"
     os.environ["LD_LIBRARY_PATH"] += "/usr/lib/ucx/:/usr/lib/:"
 
