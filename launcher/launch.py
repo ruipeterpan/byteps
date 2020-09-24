@@ -92,7 +92,7 @@ def launch_bps():
 
     check_env()
     if os.environ["DMLC_ROLE"] == "worker":
-        time.sleep(15)
+        # time.sleep(15)
         if "NVIDIA_VISIBLE_DEVICES" in os.environ:
             local_size = len(os.environ["NVIDIA_VISIBLE_DEVICES"].split(","))
         else:
@@ -109,9 +109,10 @@ def launch_bps():
             t[i].join()
 
     elif os.environ["DMLC_ROLE"] == "server":
-        time.sleep(15)
+        # time.sleep(15)
         import byteps.server
     else:
+        time.sleep(15)
         import byteps.server
 
 
