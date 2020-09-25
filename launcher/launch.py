@@ -53,7 +53,6 @@ def check_env():
         if env not in os.environ:
             print("The env " + env + " is missing")
             os._exit(0)
-    print(os.environ)
 
 
 def worker(local_rank, local_size, command):
@@ -83,16 +82,8 @@ def worker(local_rank, local_size, command):
 def launch_bps():
     print("BytePS launching " + os.environ["DMLC_ROLE"])
     sys.stdout.flush()
-    os.environ["UCX_SOCKADDR_CM_ENABLE"] = "n"
-    os.environ["UCX_TLS"] = "tcp,sockcm"
-    os.environ["UCX_SOCKADDR_TLS_PRIORITY"] = "sockcm,rdmacm"
-    os.environ["BYTEPS_UCX_ERRH_ENABLE"] = "1"
-    os.environ["DMLC_ENABLE_UCX"] = "1"
-    os.environ["LD_LIBRARY_PATH"] += "/usr/lib/ucx/:/usr/lib/:"
-
     check_env()
     if os.environ["DMLC_ROLE"] == "worker":
-        # time.sleep(15)
         if "NVIDIA_VISIBLE_DEVICES" in os.environ:
             local_size = len(os.environ["NVIDIA_VISIBLE_DEVICES"].split(","))
         else:
@@ -108,11 +99,7 @@ def launch_bps():
         for i in range(local_size):
             t[i].join()
 
-    elif os.environ["DMLC_ROLE"] == "server":
-        # time.sleep(15)
-        import byteps.server
     else:
-        time.sleep(15)
         import byteps.server
 
 
