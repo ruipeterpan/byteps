@@ -99,9 +99,11 @@ def launch_bps():
         for i in range(local_size):
             t[i].join()
 
-    else:
+    elif os.environ["DMLC_ROLE"] == "server":
         import byteps.server
-
+    else:
+        time.sleep(15)
+        import byteps.server
 
 if __name__ == "__main__":
     launch_bps()
