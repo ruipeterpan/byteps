@@ -32,6 +32,7 @@
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/shape_inference.h"
 #include "tensorflow/core/framework/op_kernel.h"
+#include "tensorflow/core/framework/tensor_shape.h"
 
 #include "tensorflow/compiler/tf2xla/shape_util.h"
 #include "tensorflow/compiler/tf2xla/xla_helpers.h"
@@ -350,8 +351,11 @@ class BytepsPushPullXlaOp : public ::tensorflow::XlaOpKernel {
       OP_REQUIRES_OK(context, ConvertStatus(common::CheckInitialized()));
 
       xla::XlaOp input_tensor = context->Input(0);
-      auto input_tensor_xla_shape_or = context->InputXlaShape(0);
-      xla::Shape output_tensor_shape = input_tensor_xla_shape_or.ValueOrDie();
+      const ::tensorflow::TensorShape input_tensor_shape = context->InputShape(0);
+      auto input_tensor_xla_shape_or =
+          TensorShapeToXLAShape(context->input_xla_type(0), input_tensor_shape);
+      // xla::Shape output_tensor_shape = input_tensor_xla_shape_or.ValueOrDie();
+      xla::Shape output_tensor_shape = input_tensor_xla_shape_or;
 
       auto node_name = name();
       std::string tmp_name;
@@ -398,8 +402,11 @@ class BytepsPushPullBlockingXlaOp : public ::tensorflow::XlaOpKernel {
       OP_REQUIRES_OK(context, ConvertStatus(common::CheckInitialized()));
 
       xla::XlaOp input_tensor = context->Input(0);
-      auto input_tensor_xla_shape_or = context->InputXlaShape(0);
-      xla::Shape output_tensor_shape = input_tensor_xla_shape_or.ValueOrDie();
+      const ::tensorflow::TensorShape input_tensor_shape = context->InputShape(0);
+      auto input_tensor_xla_shape_or =
+          TensorShapeToXLAShape(context->input_xla_type(0), input_tensor_shape);
+      // xla::Shape output_tensor_shape = input_tensor_xla_shape_or.ValueOrDie();
+      xla::Shape output_tensor_shape = input_tensor_xla_shape_or;
 
       auto node_name = name();
       std::string tmp_name;
@@ -421,7 +428,7 @@ class BytepsPushPullBlockingXlaOp : public ::tensorflow::XlaOpKernel {
       context->SetOutput(
         0, xla::CustomCall(context->builder(),
           /*call_target_name=*/"StartTaskBlockingWrapper",
-          {input_tensor}, input_tensor_xla_shape_or.ValueOrDie(), ss.str()));
+          {input_tensor}, input_tensor_xla_shape_or, ss.str()));
     }
   private:
      std::string input_tensor_name;
@@ -675,7 +682,9 @@ class BytepsSyncTensorXlaOp : public ::tensorflow::XlaOpKernel {
     void Compile(::tensorflow::XlaOpKernelContext* context) override {
       OP_REQUIRES_OK(context, ConvertStatus(common::CheckInitialized()));
       xla::XlaOp input_tensor = context->Input(0);
-      auto input_tensor_xla_shape_or = context->InputXlaShape(0);
+      const ::tensorflow::TensorShape input_tensor_shape = context->InputShape(0);
+      auto input_tensor_xla_shape_or =
+          TensorShapeToXLAShape(context->input_xla_type(0), input_tensor_shape);
 
       auto node_name = name();
       std::string tmp_name;
@@ -691,7 +700,7 @@ class BytepsSyncTensorXlaOp : public ::tensorflow::XlaOpKernel {
       context->SetOutput(
         0, xla::CustomCall(context->builder(),
           /*call_target_name=*/"SyncTensorCustomOp",
-          {input_tensor}, input_tensor_xla_shape_or.ValueOrDie(), ss.str()));
+          {input_tensor}, input_tensor_xla_shape_or, ss.str()));
 
     }
 
@@ -805,8 +814,10 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
  * get the buffer size of the i-th input tensor
  */
 int get_buf_size(::tensorflow::XlaOpKernelContext* context, int index) {
-    auto xla_tensor_shape_or = context->InputXlaShape(index);
-    xla::Shape tf_tensor_shape = xla_tensor_shape_or.ValueOrDie();
+    const ::tensorflow::TensorShape input_tensor_shape = context->InputShape(index);
+    auto xla_tensor_shape_or =
+          TensorShapeToXLAShape(context->input_xla_type(index), input_tensor_shape);
+    xla::Shape tf_tensor_shape = xla_tensor_shape_or;
     int ret;
 
     ret = xla::ShapeUtil::ByteSizeOfPrimitiveType(tf_tensor_shape.element_type());
