@@ -616,6 +616,7 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
 void StartTaskWrapper(CUstream stream, void** buffers,
                       const char* opaque, size_t opaque_len) {
   int my_rank = common::byteps_rank();
+  BPS_LOG(DEBUG, my_rank) << " x2682 enter " << __func__ << std::endl;
   std::stringstream ss(opaque);
   std::string tmp_name;
   ::tensorflow::OpKernelContext* context = nullptr;
@@ -648,6 +649,7 @@ void StartTaskWrapper(CUstream stream, void** buffers,
 
   std::thread t(StartTaskXla, context, tmp_name, bps_input, bps_input, ready_event);
   t.detach();
+  BPS_LOG(DEBUG, my_rank) << " x2682 exit " << __func__ << std::endl;
 }
 
 XLA_REGISTER_CUSTOM_CALL_TARGET(StartTaskWrapper, "CUDA");
