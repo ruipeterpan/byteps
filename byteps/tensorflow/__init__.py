@@ -26,6 +26,7 @@ import warnings
 from byteps.tensorflow.compression import Compression
 from byteps.tensorflow.ops import broadcast, _push_pull, _push_pull_xla, _sync_tensor, _sync_all_tensors, broadcast_xla, _print_tensors
 from byteps.tensorflow.ops import broadcast_xla_blocking
+from byteps.tensorflow.ops import _sync_tensors_handle_out, _my_barrier_handle_out
 from byteps.tensorflow.ops import init, shutdown, suspend, resume
 from byteps.tensorflow.ops import size, local_size, rank, local_rank
 from byteps.tensorflow.ops import handle_average_backwards_compatibility
@@ -89,6 +90,58 @@ def push_pull_xla(tensor, scope='', average=None, device_dense='', device_sparse
             new_tensor = summed_tensor
     return new_tensor, tensor_name
 
+def push_pull_xla_handle_out(tensor, scope='', average=None, device_dense='', device_sparse='',
+              compression=Compression.none, op=None, enable_async=False):
+    """Perform an push_pull on a tf.Tensor or tf.IndexedSlices.
+    Arguments:
+        tensor: tf.Tensor, tf.Variable, or tf.IndexedSlices to reduce.
+                The shape of the input must be identical across all ranks.
+        average:
+            .. warning:: .. deprecated
+
+                Use `op` instead. Will be removed.
+
+        scope: the graph name scope
+        average: If True, computes the average over all ranks.
+                 Otherwise, computes the sum over all ranks.
+        device_dense: Device to be used for dense tensors. Uses GPU by default.
+        device_sparse: Device to be used for sparse tensors. Uses GPU by default.
+        compression: Compression algorithm used to reduce the amount of data
+                     sent and received by each worker node.  Defaults to not
+                     using compression.
+        op: The reduction operation to combine tensors across different ranks.
+            Defaults to Average if None is given.
+
+    Returns:
+        A tensor of the same shape and type as `tensor`, summed across all
+        processes.
+    """
+    op = handle_average_backwards_compatibility(op, average)
+    # Averaging happens in framework code, so translate that to Sum for the actual call
+    true_op = Sum if op == Average else op
+
+    with tf.device(device_dense):
+        byteps_size = tf.cast(size(), dtype=tensor.dtype)
+        tensor_compressed, ctx = compression.compress(tensor)
+        summed_tensor_compressed = _push_pull_xla(tensor_compressed, scope)
+        handle = summed_tensor_compressed[1]
+        summed_tensor_compressed = summed_tensor_compressed[0]
+        tensor_name = summed_tensor_compressed.name
+        handle = tf.reshape(handle, [-1])
+
+        # decompression need to go after sync
+        summed_tensor_compressed = tf.cond(handle[0] < handle[1],
+                lambda: tf.identity(summed_tensor_compressed),
+                lambda: tf.identity(summed_tensor_compressed))
+        summed_tensor = compression.decompress(summed_tensor_compressed, ctx)
+        if not enable_async:
+            _div = tf.div if hasattr(tf, 'div') else tf.math.divide
+            new_tensor = (_div(summed_tensor, byteps_size)
+                          if op == Average else summed_tensor)
+        else: # no need to average for async training
+            new_tensor = summed_tensor
+    return new_tensor, tensor_name, handle
+
 def push_pull_all_grads_xla(grads, device_dense='', device_sparse='',
                             compression=Compression.none, sparse_as_dense=False):
     """ returns a list """
@@ -116,9 +169,39 @@ def push_pull_all_grads_xla(grads, device_dense='', device_sparse='',
     avg_grads = tf.cond(tmp_tensor[0] > tmp_tensor[1], lambda: [tf.identity(aa) for aa in avg_grads], lambda: [tf.identity(aa) for aa in avg_grads])
     return avg_grads
 
+def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
+                            compression=Compression.none, sparse_as_dense=False):
+    """ returns a list """
+    def sync_grads_one_shot(grads, grad_names):
+        with tf.name_scope('DistributedGradientTape' + "_Push_Pull") as scope:
+            return list(_sync_all_tensors(grads, grad_names = grad_names))
+    with tf.name_scope('DistributedGradientTape' + "_Push_Pull") as scope:
+        if sparse_as_dense:
+            grads = [tf.convert_to_tensor(grad)
+                     if grad is not None and isinstance(grad, tf.IndexedSlices)
+                     else grad for grad in grads]
+        new_grads_names_and_handles = [push_pull_xla_handle_out(grad, scope,
+                          device_dense=device_dense,
+                          device_sparse=device_sparse,
+                          compression=compression)
+                if grad is not None else grad
+                for grad in grads]
+        grads_and_names_and_handles = list(zip(*new_grads_names))
+        # return list(grads_and_names[0]), list(grads_and_names[1])
+        avg_grads, grad_names, handles = \
+          list(grads_and_names_handles[0]), list(grads_and_names_handles[1]), \
+          list(grads_and_names_handles[2])
+
+    barrier_handle = _my_barrier_handle_out(handles)
+    handles = [_sync_tensors_handle_out(barrier_handle, tensor_name=item) for item in grad_names]
+    avg_grads = [tf.cond(item[0] > item[1], lambda: tf.identity(aa)) \
+                 for item, aa in zip(handles, avg_grads]]
+    return avg_grads
+
 enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
 if enable_xla == '1':
-    push_pull_all_grads = push_pull_all_grads_xla
+    # push_pull_all_grads = push_pull_all_grads_xla
+    push_pull_all_grads = push_pull_all_grads_handle_xla
 # else:
 #     self._push_pull_grads = push_pull_grads
 

@@ -374,7 +374,7 @@ class BytepsPushPullXlaOp : public ::tensorflow::XlaOpKernel {
         ss << " " << output_tensor_shape.dimensions(i) ;
       }
       ss << std::endl;
-      auto output_shapes = xla::ShapeUtil::MakeShape(xla::F32, {2});
+      auto output_shapes = xla::ShapeUtil::MakeShape(xla::S32, {2});
       context->SetOutput(
         1, xla::CustomCall(context->builder(),
           /*call_target_name=*/"StartTaskWrapper",
@@ -389,6 +389,120 @@ class BytepsPushPullXlaOp : public ::tensorflow::XlaOpKernel {
 };
 
 REGISTER_XLA_OP(Name("BytepsPushPullXla"), BytepsPushPullXlaOp);
+
+////////////////////////////////////////////////////////////////////////////////
+class BarrierHandleOutXlaOp : public XlaOpKernel {
+ public:
+  explicit BarrierHandleOutXlaOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {
+  }
+  void Compile(XlaOpKernelContext* ctx) override {
+    std::vector<xla::XlaOp> values;
+    std::vector<::tensorflow::TensorShape> shapes;
+    OP_REQUIRES_OK(ctx, ctx->InputList("values", &values, &shapes));
+
+    std::cout << "my_name is " << name() << std::endl;
+    // S32 is int32
+    auto out_shapes = xla::ShapeUtil::MakeTupleShape({
+      xla::ShapeUtil::MakeShape(xla::S32, {2})
+    });
+    auto results = xla::CustomCall(ctx->builder(), /*call_target_name=*/"customBarrierHandleOutXlaOp",
+                           values, out_shapes);
+    auto out_0 = xla::GetTupleElement(results, 0);
+    ctx->SetOutput(0, out_0);
+  }
+ private:
+  std::vector<std::string> token_input_nodes_;
+};
+
+void
+customBarrierHandleOutXlaOp(CUstream stream, void** buffers,
+                  const char* opaque, size_t opaque_len) {
+  int* out_buf = reinterpret_cast<int*>(buffers[1]);
+  const int* in_buf = reinterpret_cast<const int*>(buffers[0]);
+  std::cout<< "xxxxxxxxxxxxxxxxxxx side effect in " << __PRETTY_FUNCTION__ << std::endl;
+}
+
+REGISTER_OP("MyBarrierHandleOut")
+    .Attr("T: {int32, int64, float16, float32, float64}")
+    .Attr("N: int >= 1")
+    .Input("values: N * T")
+    .Output("output: int32");
+
+REGISTER_XLA_OP(Name("MyBarrierHandleOut"), BarrierHandleOutXlaOp);
+XLA_REGISTER_CUSTOM_CALL_TARGET(customBarrierHandleOutXlaOp, "CUDA");
+
+////////////////////////////////////////////////////////////////////////////////
+
+class BytepsSyncTensorHandleOutXlaOp : public ::tensorflow::XlaOpKernel {
+  public:
+    explicit BytepsSyncTensorHandleOutXlaOp(::tensorflow::OpKernelConstruction* context) : ::tensorflow::XlaOpKernel(context) {
+      context->GetAttr("input_name", &input_tensor_name);
+    }
+    ~BytepsSyncTensorHandleOutXlaOp() override = default;
+
+    void Compile(::tensorflow::XlaOpKernelContext* context) override {
+      OP_REQUIRES_OK(context, ConvertStatus(common::CheckInitialized()));
+      xla::XlaOp input_handle = context->Input(0);
+      const ::tensorflow::TensorShape input_handle_shape = context->InputShape(0);
+      auto input_handle_xla_shape_or =
+          TensorShapeToXLAShape(context->input_xla_type(0), input_handle_shape);
+
+      auto node_name = name();
+      std::string tmp_name;
+      if (input_tensor_name == "default_tensor_name") {
+        tmp_name = node_name;
+      } else {
+        tmp_name = input_tensor_name;
+      }
+
+      std::stringstream ss;
+      ss << tmp_name;
+      ss << std::endl;
+      context->SetOutput(
+        0, xla::CustomCall(context->builder(),
+          /*call_target_name=*/"SyncTensorHandleOutCustomOp",
+          {input_handle}, input_handle_xla_shape_or, ss.str()));
+    }
+
+  private:
+     std::string input_tensor_name;
+};
+
+void SyncTensorHandleOutCustomOp(CUstream stream, void** buffers,
+                      const char* opaque, size_t opaque_len) {
+  std::string tmp_name;
+  std::stringstream ss(opaque);
+
+  ss >> tmp_name;
+
+  std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
+  auto it = _name_to_done_args.find(tmp_name);
+  ASSERTF(it != _name_to_done_args.end(), "post 2");
+  auto args = _name_to_done_args[tmp_name];
+  my_big_lk.unlock();
+  {
+    std::unique_lock<std::mutex> lk(args->mtx);
+    args->cv.wait(lk, [args]{
+      std::this_thread::yield();
+      return args->is_done;});
+    lk.unlock();
+  }
+  std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+  _name_to_done_args.erase(tmp_name);
+  my_lk.unlock();
+}
+
+REGISTER_OP("BytepsSyncTensorHandleOut")
+    .Attr("tensor_name: string = 'default_tensor_name'")
+    .Input("in_handle: T")
+    .Output("out_handle: T")
+    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(0));
+      return ::tensorflow::Status::OK();
+    });
+REGISTER_XLA_OP(Name("BytepsSyncTensorHandleOut"), BytepsSyncTensorHandleOutXlaOp);
+XLA_REGISTER_CUSTOM_CALL_TARGET(SyncTensorHandleOutCustomOp, "CUDA");
+////////////////////////////////////////////////////////////////////////////////
 
 class BytepsPushPullBlockingXlaOp : public ::tensorflow::XlaOpKernel {
   public:

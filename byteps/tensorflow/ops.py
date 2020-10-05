@@ -193,6 +193,17 @@ def _sync_all_tensors(tensors, grad_names=None):
     return C_LIB.byteps_sync_all_tensors(tensors, name=None, tensor_names =
             tensor_names, M = len(tensor_names) // 2 + 1)
 
+def _sync_tensors_handle_out(tensor, grad_name=None):
+    tmp_name = grad_name.split(":")
+    tmp_name = ":".join(tmp_name[:-1])
+    tmp_name = _normalize_name(tmp_name)
+
+    return C_LIB.byteps_sync_tensor_handle_out(tensor, name=None,
+            tensor_name = tmp_name)
+
+def _my_barrier_handle_out(handles):
+    return C_LIB.my_barrier_handle_out(handles)
+
 def _print_tensors(tensors, grad_names=None):
     return C_LIB.byteps_print_tensors(tensors, name=None, tensor_names = grad_names)
 
