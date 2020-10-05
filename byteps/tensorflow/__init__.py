@@ -186,16 +186,15 @@ def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
                           compression=compression)
                 if grad is not None else grad
                 for grad in grads]
-        grads_and_names_and_handles = list(zip(*new_grads_names))
+        grads_and_names_and_handles = list(zip(*new_grads_names_and_handles))
         # return list(grads_and_names[0]), list(grads_and_names[1])
         avg_grads, grad_names, handles = \
-          list(grads_and_names_handles[0]), list(grads_and_names_handles[1]), \
-          list(grads_and_names_handles[2])
+          list(grads_and_names_and_handles[0]), list(grads_and_names_and_handles[1]), \
+          list(grads_and_names_and_handles[2])
 
     barrier_handle = _my_barrier_handle_out(handles)
     handles = [_sync_tensors_handle_out(barrier_handle, tensor_name=item) for item in grad_names]
-    avg_grads = [tf.cond(item[0] > item[1], lambda: tf.identity(aa)) \
-                 for item, aa in zip(handles, avg_grads]]
+    avg_grads = [tf.cond(item[0] > item[1], lambda: tf.identity(aa), lambda: tf.identity(aa))  for item, aa in zip(handles, avg_grads)]
     return avg_grads
 
 enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')

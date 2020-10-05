@@ -391,11 +391,10 @@ class BytepsPushPullXlaOp : public ::tensorflow::XlaOpKernel {
 REGISTER_XLA_OP(Name("BytepsPushPullXla"), BytepsPushPullXlaOp);
 
 ////////////////////////////////////////////////////////////////////////////////
-class BarrierHandleOutXlaOp : public XlaOpKernel {
+class BarrierHandleOutXlaOp : public ::tensorflow::XlaOpKernel {
  public:
-  explicit BarrierHandleOutXlaOp(OpKernelConstruction* ctx) : XlaOpKernel(ctx) {
-  }
-  void Compile(XlaOpKernelContext* ctx) override {
+  explicit BarrierHandleOutXlaOp(::tensorflow::OpKernelConstruction* ctx) : ::tensorflow::XlaOpKernel(ctx) { }
+  void Compile(::tensorflow::XlaOpKernelContext* ctx) override {
     std::vector<xla::XlaOp> values;
     std::vector<::tensorflow::TensorShape> shapes;
     OP_REQUIRES_OK(ctx, ctx->InputList("values", &values, &shapes));
@@ -436,7 +435,7 @@ XLA_REGISTER_CUSTOM_CALL_TARGET(customBarrierHandleOutXlaOp, "CUDA");
 class BytepsSyncTensorHandleOutXlaOp : public ::tensorflow::XlaOpKernel {
   public:
     explicit BytepsSyncTensorHandleOutXlaOp(::tensorflow::OpKernelConstruction* context) : ::tensorflow::XlaOpKernel(context) {
-      context->GetAttr("input_name", &input_tensor_name);
+      context->GetAttr("tensor_name", &input_tensor_name);
     }
     ~BytepsSyncTensorHandleOutXlaOp() override = default;
 
@@ -493,6 +492,7 @@ void SyncTensorHandleOutCustomOp(CUstream stream, void** buffers,
 }
 
 REGISTER_OP("BytepsSyncTensorHandleOut")
+    .Attr("T: {int32, int64, float16, float32, float64}")
     .Attr("tensor_name: string = 'default_tensor_name'")
     .Input("in_handle: T")
     .Output("out_handle: T")
