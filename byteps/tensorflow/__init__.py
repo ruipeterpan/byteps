@@ -123,9 +123,7 @@ def push_pull_xla_handle_out(tensor, scope='', average=None, device_dense='', de
     with tf.device(device_dense):
         byteps_size = tf.cast(size(), dtype=tensor.dtype)
         tensor_compressed, ctx = compression.compress(tensor)
-        summed_tensor_compressed = _push_pull_xla(tensor_compressed, scope)
-        handle = summed_tensor_compressed[1]
-        summed_tensor_compressed = summed_tensor_compressed[0]
+        summed_tensor_compressed, handle = _push_pull_xla(tensor_compressed, scope)
         tensor_name = summed_tensor_compressed.name
         handle = tf.reshape(handle, [-1])
 

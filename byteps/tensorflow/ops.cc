@@ -329,10 +329,11 @@ Output
 
 REGISTER_OP("BytepsPushPullXla")
   .Attr("T: {int32, int64, float16, float32, float64}")
+  // .Attr("TT: {int32, int64, float16, float32, float64}")
   .Attr("input_name: string = 'default_tensor_name'")
   .Input("tensor: T")
-  .Output("sum: M * T")
-  .Attr("M: int >= 1")
+  .Output("sum: T")
+  .Output("out_handle: int32")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
     c->set_output(0, c->input(0));
     return ::tensorflow::Status::OK();
@@ -374,11 +375,11 @@ class BytepsPushPullXlaOp : public ::tensorflow::XlaOpKernel {
         ss << " " << output_tensor_shape.dimensions(i) ;
       }
       ss << std::endl;
-      auto output_shapes = xla::ShapeUtil::MakeShape(xla::S32, {2});
+      auto output_shape = xla::ShapeUtil::MakeShape(xla::S32, {2});
       context->SetOutput(
         1, xla::CustomCall(context->builder(),
           /*call_target_name=*/"StartTaskWrapper",
-          {input_tensor}, output_tensor_shape, ss.str()));
+          {input_tensor}, output_shape, ss.str()));
 
       context->op_kernel_context()->set_output(0,
         context->op_kernel_context()->input(0));

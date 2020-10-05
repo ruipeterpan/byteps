@@ -157,7 +157,7 @@ def _push_pull_xla(tensor, scope='', name=None):
         full_name = "empty_name_" + randomString()
     full_name_ascii = full_name.encode("ascii")
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
-    return C_LIB.byteps_push_pull_xla(tensor, name=name, input_name = full_name, M = 2)
+    return C_LIB.byteps_push_pull_xla(tensor, name=name, input_name = full_name)
 
 def _sync_tensor(tensor, scope='', name=None, full_name=None):
     if name is None and not _executing_eagerly():
