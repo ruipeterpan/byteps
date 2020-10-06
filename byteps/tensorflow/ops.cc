@@ -389,7 +389,8 @@ class BytepsPushPullXlaOp : public ::tensorflow::XlaOpKernel {
      std::string input_tensor_name;
 };
 
-REGISTER_XLA_OP(Name("BytepsPushPullXla"), BytepsPushPullXlaOp);
+REGISTER_XLA_OP(Name("BytepsPushPullXla").Device(::tensorflow::DEVICE_GPU_XLA_JIT),
+    BytepsPushPullXlaOp);
 
 ////////////////////////////////////////////////////////////////////////////////
 class BarrierHandleOutXlaOp : public ::tensorflow::XlaOpKernel {
