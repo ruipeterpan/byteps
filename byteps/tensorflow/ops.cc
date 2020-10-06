@@ -703,7 +703,8 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
 
   std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
   auto it = _name_to_done_args.find(name_key);
-  ASSERTF(it == _name_to_done_args.end(), "duplicate tensor_name");
+  ASSERTF(it == _name_to_done_args.end(), std::string("duplicate tensor_name") +
+    std::string(name_key));
   _name_to_done_args[name_key] = new_args;
   my_lk.unlock();
   _name_to_done_args_cv.notify_one();
