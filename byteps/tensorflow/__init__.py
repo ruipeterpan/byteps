@@ -140,7 +140,7 @@ def push_pull_xla_handle_out(tensor, scope='', average=None, device_dense='', de
             new_tensor = summed_tensor
     return new_tensor, tensor_name, handle
 
-def push_pull_all_grads_xla(grads, device_dense='', device_sparse='',
+def push_pull_all_grads_sync_one_shot_xla(grads, device_dense='', device_sparse='',
                             compression=Compression.none, sparse_as_dense=False):
     """ returns a list """
     def sync_grads_one_shot(grads, grad_names):
@@ -197,7 +197,9 @@ def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
 
 enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
 if enable_xla == '1':
-    # push_pull_all_grads = push_pull_all_grads_xla
+    # push_pull_all_grads_xla = push_pull_all_grads_sync_one_shot_xla
+    # push_pull_all_grads = push_pull_all_grads_sync_one_shot_xla
+    push_pull_all_grads_xla = push_pull_all_grads_handle_xla
     push_pull_all_grads = push_pull_all_grads_handle_xla
 # else:
 #     self._push_pull_grads = push_pull_grads
