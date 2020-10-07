@@ -34,6 +34,7 @@ from byteps.tensorflow.util import _executing_eagerly
 
 import tensorflow as tf
 from tensorflow.python.ops import control_flow_ops
+import sys
 
 Average = "Average"
 Sum = "Sum"
@@ -78,8 +79,8 @@ def push_pull_xla(tensor, scope='', average=None, device_dense='', device_sparse
         tensor_name = summed_tensor_compressed.name
         handle = tf.reshape(handle, [-1])
 
-        summed_tensor_compressed = tf.cond(handle[0] < handle[1],
-                lambda: tf.identity(summed_tensor_compressed),
+        summed_tensor_compressed = tf.cond(handle[0] > handle[1],
+                lambda: tf.identity(summed_tensor_compressed) + 1,
                 lambda: tf.identity(summed_tensor_compressed))
         summed_tensor = compression.decompress(summed_tensor_compressed, ctx)
         if not enable_async:
@@ -128,8 +129,8 @@ def push_pull_xla_handle_out(tensor, scope='', average=None, device_dense='', de
         handle = tf.reshape(handle, [-1])
 
         # decompression need to go after sync
-        summed_tensor_compressed = tf.cond(handle[0] < handle[1],
-                lambda: tf.identity(summed_tensor_compressed),
+        summed_tensor_compressed = tf.cond(handle[0] > handle[1],
+                lambda: tf.identity(summed_tensor_compressed) + 1,
                 lambda: tf.identity(summed_tensor_compressed))
         summed_tensor = compression.decompress(summed_tensor_compressed, ctx)
         if not enable_async:
@@ -164,15 +165,17 @@ def push_pull_all_grads_sync_one_shot_xla(grads, device_dense='', device_sparse=
     new_grad_names = ["throwaway_dummy"] * len(grads) + grad_names
     tmp_avg_grads = sync_grads_one_shot(grads + avg_grads, new_grad_names)
     tmp_tensor = tf.reshape(tmp_avg_grads[-1], [-1])
-    avg_grads = tf.cond(tmp_tensor[0] > tmp_tensor[1], lambda: [tf.identity(aa) for aa in avg_grads], lambda: [tf.identity(aa) for aa in avg_grads])
+    avg_grads = tf.cond(tmp_tensor[0] > tmp_tensor[1], \
+            lambda: [tf.identity(aa) + 1 for aa in avg_grads], \
+            lambda: [tf.identity(aa) for aa in avg_grads])
     return avg_grads
 
 def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
                             compression=Compression.none, sparse_as_dense=False):
     """ returns a list """
-    def sync_grads_one_shot(grads, grad_names):
-        with tf.name_scope('DistributedGradientTape' + "_Push_Pull") as scope:
-            return list(_sync_all_tensors(grads, grad_names = grad_names))
+    for item in grads:
+        print("rank = ", local_rank, item)
+    # sys.exit(0)
     with tf.name_scope('DistributedGradientTape' + "_Push_Pull") as scope:
         if sparse_as_dense:
             grads = [tf.convert_to_tensor(grad)
@@ -191,8 +194,10 @@ def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
           list(grads_and_names_and_handles[2])
 
     barrier_handle = _my_barrier_handle_out(handles)
-    handles = [_sync_tensors_handle_out(barrier_handle, tensor_name=item) for item in grad_names]
-    avg_grads = [tf.cond(item[0] > item[1], lambda: tf.identity(aa), lambda: tf.identity(aa))  for item, aa in zip(handles, avg_grads)]
+    handles = [_sync_tensors_handle_out(barrier_handle, tensor, tensor_name=item) for tensor, item in zip(grads, grad_names)]
+    avg_grads = [tf.cond(item[0] > item[1], \
+            lambda: tf.identity(aa) + 1, \
+            lambda: tf.identity(aa)) for item, aa in zip(handles, avg_grads)]
     return avg_grads
 
 enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
@@ -310,7 +315,7 @@ def broadcast_variables_xla(variables, root_rank, scope=''):
     tmp_tensors = sync_grads_one_shot(variables + new_tensors, new_tensor_names)
     handle = tf.reshape(tmp_tensors[-1], [-1])
     new_tensors = tf.cond(handle[0] > handle[1], \
-                          lambda: [tf.identity(aa) for aa in new_tensors], \
+                          lambda: [tf.identity(aa) + 1 for aa in new_tensors], \
                           lambda: [tf.identity(aa) for aa in new_tensors])
     return tf.group(*[_assign(var, tmp_var) \
                       for var, tmp_var in zip(variables, new_tensors)])
@@ -621,7 +626,9 @@ if hasattr(tf, 'GradientTape'):
                 new_grad_names = ["throwaway_dummy"] * len(grads) + grad_names
                 tmp_avg_grads = self._sync_grads_one_shot(grads + avg_grads, new_grad_names)
                 tmp_tensor = tf.reshape(tmp_avg_grads[-1], [-1])
-                avg_grads = tf.cond(tmp_tensor[0] > tmp_tensor[1], lambda: [tf.identity(aa) for aa in avg_grads], lambda: [tf.identity(aa) for aa in avg_grads])
+                avg_grads = tf.cond(tmp_tensor[0] > tmp_tensor[1], \
+                        lambda: [tf.identity(aa) + 1 for aa in avg_grads], \
+                        lambda: [tf.identity(aa) for aa in avg_grads])
                 return avg_grads
 
             enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')

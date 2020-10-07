@@ -193,12 +193,12 @@ def _sync_all_tensors(tensors, grad_names=None):
     return C_LIB.byteps_sync_all_tensors(tensors, name=None, tensor_names =
             tensor_names, M = len(tensor_names) // 2 + 1)
 
-def _sync_tensors_handle_out(tensor, tensor_name=None):
+def _sync_tensors_handle_out(handle, tensor, tensor_name=None):
     tmp_name = tensor_name.split(":")
     tmp_name = ":".join(tmp_name[:-1])
     tmp_name = _normalize_name(tmp_name)
 
-    return C_LIB.byteps_sync_tensor_handle_out(tensor, name=None,
+    return C_LIB.byteps_sync_tensor_handle_out(handle, tensor, name=None,
             tensor_name = tmp_name)
 
 def _my_barrier_handle_out(handles):
@@ -307,8 +307,8 @@ def broadcast_xla(tensor, root_rank, scope='', name=None, is_variable=True):
 
     output_name = output.name
     handle = tf.reshape(handle, [-1])
-    output = tf.cond(handle[0] < handle[1],
-            lambda: tf.identity(output),
+    output = tf.cond(handle[0] > handle[1],
+            lambda: tf.identity(output) + 1,
             lambda: tf.identity(output))
     return output, output_name
 
