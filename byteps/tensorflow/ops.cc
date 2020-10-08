@@ -514,9 +514,9 @@ void SyncTensorHandleOutCustomOp(CUstream stream, void** buffers,
     }
     lk.unlock();
   }
-  // std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
-  // _name_to_done_args.erase(tmp_name);
-  // my_lk.unlock();
+  std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+  _name_to_done_args.erase(tmp_name);
+  my_lk.unlock();
   BPS_LOG(DEBUG, my_rank) << " x2682 sync done name_key " << tmp_name << std::endl;
 }
 
@@ -965,9 +965,9 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
       }
       lk.unlock();
     }
-    // std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
-    // _name_to_done_args.erase(tmp_name);
-    // my_lk.unlock();
+    std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+    _name_to_done_args.erase(tmp_name);
+    my_lk.unlock();
     // cudaStreamSynchronize(stream);
     seen_count++;
   }
