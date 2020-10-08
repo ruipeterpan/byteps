@@ -478,7 +478,7 @@ void SyncTensorHandleOutCustomOp(CUstream stream, void** buffers,
   std::stringstream ss(opaque);
   int* handle_buf = reinterpret_cast<int*>(buffers[2]);
 
-  /* set handle[0] = 0, handle[1] = 0x01010101 */
+  /* set handle[0] = 0, handle[1] = 0x01010101 which is 16843009 in decimal */
   cudaMemset(handle_buf, 0, sizeof(int));
   cudaMemset(handle_buf + 1, 1, sizeof(int));
 
@@ -504,10 +504,14 @@ void SyncTensorHandleOutCustomOp(CUstream stream, void** buffers,
     args->cv.wait(lk, [args]{
       std::this_thread::yield();
       return args->is_done;});
+    args->num_waiting--;
+    if args->num_waiting == 0) {
+      args->is_done = false;
+    }
     lk.unlock();
   }
   std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
-  _name_to_done_args.erase(tmp_name);
+  // _name_to_done_args.erase(tmp_name);
   my_lk.unlock();
   BPS_LOG(DEBUG, my_rank) << " x2682 erased name_key " << tmp_name << std::endl;
 }
@@ -722,12 +726,18 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
   new_args->bps_out_buf = const_cast<void *>(byteps_output->data());
   new_args->bps_in_buf = const_cast<void *>(byteps_input->data());
   new_args->bps_buf_size = size;
+  new_args->num_waiting = 1;
 
   BPS_LOG(DEBUG, my_rank) << " x2682 inserting name_key " << name_key << std::endl;
   std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
   auto it = _name_to_done_args.find(name_key);
-  ASSERTF(it == _name_to_done_args.end(), std::string("duplicate tensor_name ") +
-    std::string(name_key));
+  if (it != _name_to_done_args.end()) {
+    it->second->num_waiting++;
+    my_lk.unlock();
+    return;
+  }
+  // ASSERTF(it == _name_to_done_args.end(), std::string("duplicate tensor_name ") +
+  //   std::string(name_key));
   _name_to_done_args[name_key] = new_args;
   my_lk.unlock();
   _name_to_done_args_cv.notify_all();
