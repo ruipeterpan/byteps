@@ -430,7 +430,8 @@ REGISTER_OP("MyBarrierHandleOut")
     .Input("values: N * T")
     .Output("output: int32");
 
-REGISTER_XLA_OP(Name("MyBarrierHandleOut"), BarrierHandleOutXlaOp);
+REGISTER_XLA_OP(Name("MyBarrierHandleOut").Device(::tensorflow::DEVICE_GPU_XLA_JIT),
+                BarrierHandleOutXlaOp);
 XLA_REGISTER_CUSTOM_CALL_TARGET(customBarrierHandleOutXlaOp, "CUDA");
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -505,15 +506,18 @@ void SyncTensorHandleOutCustomOp(CUstream stream, void** buffers,
       std::this_thread::yield();
       return args->is_done;});
     args->num_waiting--;
-    if args->num_waiting == 0) {
+    if (args->num_waiting == 0) {
       args->is_done = false;
+    } else {
+      BPS_LOG(DEBUG, my_rank) << " x2682 exiting, i am not the last sync on " <<
+      " name_key: " << tmp_name << std::endl;
     }
     lk.unlock();
   }
-  std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+  // std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
   // _name_to_done_args.erase(tmp_name);
-  my_lk.unlock();
-  BPS_LOG(DEBUG, my_rank) << " x2682 erased name_key " << tmp_name << std::endl;
+  // my_lk.unlock();
+  BPS_LOG(DEBUG, my_rank) << " x2682 sync done name_key " << tmp_name << std::endl;
 }
 
 REGISTER_OP("BytepsSyncTensorHandleOut")
@@ -526,7 +530,8 @@ REGISTER_OP("BytepsSyncTensorHandleOut")
       c->set_output(0, c->input(0));
       return ::tensorflow::Status::OK();
     });
-REGISTER_XLA_OP(Name("BytepsSyncTensorHandleOut"), BytepsSyncTensorHandleOutXlaOp);
+REGISTER_XLA_OP(Name("BytepsSyncTensorHandleOut").Device(::tensorflow::DEVICE_GPU_XLA_JIT),
+  BytepsSyncTensorHandleOutXlaOp);
 XLA_REGISTER_CUSTOM_CALL_TARGET(SyncTensorHandleOutCustomOp, "CUDA");
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -733,8 +738,11 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
   auto it = _name_to_done_args.find(name_key);
   if (it != _name_to_done_args.end()) {
     it->second->num_waiting++;
-    my_lk.unlock();
-    return;
+    if (it->second->num_waiting > 1) {
+      BPS_LOG(DEBUG, my_rank) << " x2682 seen name_key " << name_key << std::endl;
+      my_lk.unlock();
+      return;
+    }
   }
   // ASSERTF(it == _name_to_done_args.end(), std::string("duplicate tensor_name ") +
   //   std::string(name_key));
@@ -951,11 +959,15 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
       while (!args->is_done) {
         args->cv.wait(lk);
       }
+      args->num_waiting--;
+      if (args->num_waiting == 0) {
+        args->is_done = false;
+      }
       lk.unlock();
     }
-    std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
-    _name_to_done_args.erase(tmp_name);
-    my_lk.unlock();
+    // std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+    // _name_to_done_args.erase(tmp_name);
+    // my_lk.unlock();
     // cudaStreamSynchronize(stream);
     seen_count++;
   }

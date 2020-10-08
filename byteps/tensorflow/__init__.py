@@ -176,7 +176,7 @@ def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
     for item in grads:
         print("rank = ", local_rank, item)
     # sys.exit(0)
-    with tf.name_scope('DistributedGradientTape' + "_Push_Pull") as scope:
+    with tf.name_scope('xxxxDistributedGradientTape' + "_Push_Pull") as scope:
         if sparse_as_dense:
             grads = [tf.convert_to_tensor(grad)
                      if grad is not None and isinstance(grad, tf.IndexedSlices)

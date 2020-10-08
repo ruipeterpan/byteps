@@ -83,6 +83,7 @@ struct Xla_done_cb_args{
   void *bps_out_buf;
   void *bps_in_buf;
   int bps_buf_size;
+  int num_waiting;
 };
 
 extern std::unordered_map<std::string, std::shared_ptr<Xla_done_cb_args>> _name_to_done_args;
