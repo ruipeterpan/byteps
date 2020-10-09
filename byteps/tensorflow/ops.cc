@@ -832,7 +832,8 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
   new_args->bps_buf_size = size;
   new_args->num_waiting = 1;
 
-  BPS_LOG(DEBUG, my_rank) << " x2682 inserting name_key " << name_key << std::endl;
+  BPS_LOG(DEBUG, my_rank) << " x2682 inserting name_key " << name_key <<
+    " data_ptr: " << new_args->bps_in_buf << std::endl;
   std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
   auto it = _name_to_done_args.find(name_key);
   ASSERTF(it == _name_to_done_args.end(), std::string("duplicate tensor_name ") +
@@ -851,7 +852,7 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
   auto enqueue_result =
       EnqueueTensor(byteps_context, byteps_input, byteps_output, ready_event,
                     device, -byteps_context.declared_key, 0,
-                    [name_key](const common::Status& status) {
+                    [name_key, my_rank](const common::Status& status) {
                       std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
                       auto it = _name_to_done_args.find(name_key);
                       ASSERTF(it != _name_to_done_args.end(), "YOU SHOULD NOT SEE ME");
@@ -860,6 +861,7 @@ void StartTaskXla(::tensorflow::OpKernelContext* context,
                       {
                         std::lock_guard<std::mutex> lk(args->mtx);
                         args->is_done = true;
+                        BPS_LOG(DEBUG, my_rank) << " x2682 done name_key " << name_key << std::endl;
                       }
 
                       args->cv.notify_one();
@@ -1021,10 +1023,38 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
   const char* opaque, size_t opaque_len) {
   int num;
   int seen_count = 0;
+  int num_synced = 0;
   std::vector<int> buf_sizes;
   std::string tmp_name;
   std::stringstream ss(opaque);
   int my_rank = common::byteps_rank();
+  const float** in_buf = reinterpret_cast<const float**>(buffers[0]);
+
+  ////////////////////
+  std::stringstream tmp_ss(opaque);
+  tmp_ss >> num;
+  while (tmp_ss >> tmp_name) {
+    int buf_size;
+    tmp_ss >> buf_size;
+    if (tmp_name == "throwaway_dummy") {
+      continue;
+    }
+    auto args = _name_to_done_args[tmp_name];
+    auto expecting = args->bps_in_buf;
+    auto got_ptr = buffers[num_synced];
+    if (got_ptr != expecting) {
+      BPS_LOG(DEBUG, my_rank) << " x2682_error expecting ptr: " << expecting
+        << " but got ptr: " << got_ptr << " name_key: " << tmp_name
+        << std::endl;
+    } else {
+      BPS_LOG(DEBUG, my_rank) << " x2682_correct expecting ptr: " << expecting
+        << " got ptr: " << got_ptr << " name_key: " << tmp_name
+        << std::endl;
+    }
+    num_synced++;
+  }
+  num_synced = 0;
+  ////////////////////
 
   ss >> num;
   while (ss >> tmp_name) {
@@ -1055,6 +1085,20 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
     }
     {
       std::unique_lock<std::mutex> lk(args->mtx);
+
+      auto expecting = args->bps_in_buf;
+      auto got_ptr = buffers[num_synced];
+      if (got_ptr != expecting) {
+        BPS_LOG(DEBUG, my_rank) << " x2682_error expecting ptr: " << expecting
+          << " but got ptr: " << got_ptr << " name_key: " << tmp_name
+          << std::endl;
+      } else {
+        BPS_LOG(DEBUG, my_rank) << " x2682_correct expecting ptr: " << expecting
+          << "  got ptr: " << got_ptr << " name_key: " << tmp_name
+          << std::endl;
+      }
+      num_synced++;
+
       while (!args->is_done) {
         args->cv.wait(lk);
       }
