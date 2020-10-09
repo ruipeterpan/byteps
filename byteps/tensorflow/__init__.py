@@ -631,9 +631,29 @@ if hasattr(tf, 'GradientTape'):
                         lambda: [tf.identity(aa) for aa in avg_grads])
                 return avg_grads
 
+            def push_pull_grads_xla_wrapper(grads):
+                record = []
+                new_grads = []
+                for item in grads:
+                    if item.dtype == tf.float16:
+                        new_grads.append(tf.dtypes.cast(item, tf.float32))
+                        record.append(True)
+                    else:
+                        new_grads.append(item)
+                        record.append(False)
+                new_grads = push_pull_grads_xla(new_grads)
+                ret = []
+                for a, b in zip(record, new_grads):
+                    if a:
+                        ret.append(tf.dtypes.cast(b, dtype=tf.float16))
+                    else:
+                        ret.append(b)
+                return ret
+
             enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
             if enable_xla == '1':
-                self._push_pull_grads = push_pull_grads_xla
+                # self._push_pull_grads = push_pull_grads_xla
+                self._push_pull_grads = push_pull_grads_xla_wrapper
             else:
                 self._push_pull_grads = push_pull_grads
 

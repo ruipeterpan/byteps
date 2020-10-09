@@ -535,6 +535,105 @@ REGISTER_XLA_OP(Name("BytepsSyncTensorHandleOut").Device(::tensorflow::DEVICE_GP
 XLA_REGISTER_CUSTOM_CALL_TARGET(SyncTensorHandleOutCustomOp, "CUDA");
 ////////////////////////////////////////////////////////////////////////////////
 
+class BytepsSyncTensorHandleOutV2XlaOp : public ::tensorflow::XlaOpKernel {
+  public:
+    explicit BytepsSyncTensorHandleOutV2XlaOp(::tensorflow::OpKernelConstruction* context) : ::tensorflow::XlaOpKernel(context) {
+      context->GetAttr("tensor_name", &input_tensor_name);
+    }
+    ~BytepsSyncTensorHandleOutV2XlaOp() override = default;
+
+    void Compile(::tensorflow::XlaOpKernelContext* context) override {
+      OP_REQUIRES_OK(context, ConvertStatus(common::CheckInitialized()));
+      xla::XlaOp input_handle = context->Input(0);
+      xla::XlaOp input_tensor = context->Input(1);
+      const ::tensorflow::TensorShape input_handle_shape = context->InputShape(0);
+      auto input_handle_xla_shape_or =
+          TensorShapeToXLAShape(context->input_xla_type(0), input_handle_shape);
+
+      auto node_name = name();
+      std::string tmp_name;
+      if (input_tensor_name == "default_tensor_name") {
+        tmp_name = node_name;
+      } else {
+        tmp_name = input_tensor_name;
+      }
+
+      std::stringstream ss;
+      ss << tmp_name;
+      ss << std::endl;
+      context->SetOutput(
+        0, xla::CustomCall(context->builder(),
+          /*call_target_name=*/"SyncTensorHandleOutV2CustomOp",
+          {input_handle, input_tensor}, input_handle_xla_shape_or, ss.str()));
+    }
+
+  private:
+     std::string input_tensor_name;
+};
+
+void SyncTensorHandleOutV2CustomOp(CUstream stream, void** buffers,
+                      const char* opaque, size_t opaque_len) {
+  int my_rank = common::byteps_rank();
+  std::string tmp_name;
+  std::stringstream ss(opaque);
+  int* handle_buf = reinterpret_cast<int*>(buffers[2]);
+
+  /* set handle[0] = 0, handle[1] = 0x01010101 which is 16843009 in decimal */
+  cudaMemset(handle_buf, 0, sizeof(int));
+  cudaMemset(handle_buf + 1, 1, sizeof(int));
+
+  ss >> tmp_name;
+  BPS_LOG(DEBUG, my_rank) << " x2682 inside " << __func__ <<
+      " waiting for name_key: " << tmp_name << std::endl;
+
+  std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
+  _name_to_done_args_cv.wait(my_big_lk,
+    [&tmp_name]{
+      std::this_thread::yield();
+      return _name_to_done_args.find(tmp_name) != _name_to_done_args.end();
+    });
+
+  auto it = _name_to_done_args.find(tmp_name);
+  ASSERTF(it != _name_to_done_args.end(), "post 2");
+  auto args = _name_to_done_args[tmp_name];
+  my_big_lk.unlock();
+  BPS_LOG(DEBUG, my_rank) << " x2682 " << __func__ <<
+      " got name_key: " << tmp_name << std::endl;
+  {
+    std::unique_lock<std::mutex> lk(args->mtx);
+    args->cv.wait(lk, [args]{
+      std::this_thread::yield();
+      return args->is_done;});
+    args->num_waiting--;
+    if (args->num_waiting == 0) {
+      args->is_done = false;
+    } else {
+      BPS_LOG(DEBUG, my_rank) << " x2682 exiting, i am not the last sync on " <<
+      " name_key: " << tmp_name << std::endl;
+    }
+    lk.unlock();
+  }
+  std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+  _name_to_done_args.erase(tmp_name);
+  my_lk.unlock();
+  BPS_LOG(DEBUG, my_rank) << " x2682 sync done name_key " << tmp_name << std::endl;
+}
+
+REGISTER_OP("BytepsSyncTensorHandleOutV2")
+    .Attr("T: {int32, int64, float16, float32, float64}")
+    .Attr("tensor_name: string = 'default_tensor_name'")
+    .Input("in_handle: int32")
+    .Input("in_tensor: T")
+    .Output("out_handle: int32")
+    .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
+      c->set_output(0, c->input(0));
+      return ::tensorflow::Status::OK();
+    });
+REGISTER_XLA_OP(Name("BytepsSyncTensorHandleOutV2").Device(::tensorflow::DEVICE_GPU_XLA_JIT),
+  BytepsSyncTensorHandleOutV2XlaOp);
+XLA_REGISTER_CUSTOM_CALL_TARGET(SyncTensorHandleOutV2CustomOp, "CUDA");
+////////////////////////////////////////////////////////////////////////////////
+
 class BytepsPushPullBlockingXlaOp : public ::tensorflow::XlaOpKernel {
   public:
     explicit BytepsPushPullBlockingXlaOp(::tensorflow::OpKernelConstruction* context) : ::tensorflow::XlaOpKernel(context) {
@@ -972,6 +1071,7 @@ void SyncAllTensorsCustomOp(CUstream stream, void** buffers,
     seen_count++;
   }
   ASSERTF(num == seen_count, "pos 5");
+  BPS_LOG(DEBUG, my_rank) << " x2682 exitting " << __func__ << std::endl;
 }
 
 /**
@@ -1060,7 +1160,8 @@ REGISTER_OP("BytepsSyncAllTensors")
       // }
       // return ::tensorflow::Status::OK();
     });
-REGISTER_XLA_OP(Name("BytepsSyncAllTensors"), BytePSSyncAllTensorsXlaOp);
+REGISTER_XLA_OP(Name("BytepsSyncAllTensors").Device(::tensorflow::DEVICE_GPU_XLA_JIT),
+  BytePSSyncAllTensorsXlaOp);
 XLA_REGISTER_CUSTOM_CALL_TARGET(SyncAllTensorsCustomOp, "CUDA");
 ////////////////////////////////////////////////////////////////////////////
 //for debugging
