@@ -417,8 +417,15 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
       std::string tmp_name;
       if (input_tensor_name == "default_tensor_name") {
         tmp_name = node_name;
+        BPS_LOG(DEBUG, my_rank) << " x2682 inside " << __func__
+                                << " tmp_name: " << tmp_name << " node_name: "
+                                << node_name <<std::endl;
+
       } else {
         tmp_name = input_tensor_name;
+        BPS_LOG(DEBUG, my_rank) << " x2682 inside " << __func__
+                                << " tmp_name: " << tmp_name << " node_name: "
+                                << node_name <<std::endl;
       }
 
       std::stringstream ss;
@@ -432,7 +439,7 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
       ss << std::endl;
       auto output_shape = xla::ShapeUtil::MakeShape(xla::S32, {2});
       context->SetOutput(
-        1, xla::CustomCall(context->builder(),
+        0, xla::CustomCall(context->builder(),
           /*call_target_name=*/"customBytepsPushPullKickoffXlaOp",
           {input_tensor}, output_tensor_shape, ss.str()));
 
@@ -507,7 +514,7 @@ void PushPullKickoff(::tensorflow::OpKernelContext* context,
                       {
                         std::lock_guard<std::mutex> lk(args->mtx);
                         args->is_done = true;
-                        BPS_LOG(DEBUG, my_rank) << " x2682 done name_key " << name_key << std::endl;
+                        BPS_LOG(DEBUG, my_rank) << " x2682 push_pull done name_key " << name_key << std::endl;
                       }
 
                       args->cv.notify_one();
@@ -574,6 +581,8 @@ XLA_REGISTER_CUSTOM_CALL_TARGET(customBytepsPushPullKickoffXlaOp, "CUDA");
 //////
 void WaitForTensor(std::string tensor_name,
               ::tensorflow::AsyncOpKernel::DoneCallback done) {
+  int my_rank =  common::byteps_rank();
+
   std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
   _name_to_done_args_cv.wait(my_big_lk,
     [&tensor_name]{
@@ -593,6 +602,7 @@ void WaitForTensor(std::string tensor_name,
       return args->is_done;});
     lk.unlock();
   }
+  BPS_LOG(DEBUG, my_rank) << " x2682 wait done on name_key " << tensor_name << std::endl;
   done();
 }
 
@@ -607,12 +617,13 @@ class BytePSPushPullWaitOp : public ::tensorflow::AsyncOpKernel {
 
   void ComputeAsync(::tensorflow::OpKernelContext* context,
                     DoneCallback done) override {
+    int my_rank =  common::byteps_rank();
     OP_REQUIRES_OK_ASYNC(context, ConvertStatus(common::CheckInitialized()),
                          done);
+    BPS_LOG(DEBUG, my_rank) << " x2682 about to wait on name_key " << input_tensor_name << std::endl;
 
     context->set_output(0, context->input(0));
-    std::thread t(WaitForTensor, context, done, tmp_name, bps_input, bps_output,
-                    ready_event);
+    std::thread t(WaitForTensor, input_tensor_name, done);
     t.detach();
   }
 };
