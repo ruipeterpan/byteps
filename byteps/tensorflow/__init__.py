@@ -173,6 +173,7 @@ def push_pull_kickoff(tensor, scope='', average=None, device_dense='', device_sp
     true_op = Sum if op == Average else op
 
     with tf.device(device_dense):
+        # tensor_name = tensor.name
         # byteps_size = tf.cast(size(), dtype=tensor.dtype)
         # tensor_compressed, ctx = compression.compress(tensor)
         tensor_compressed = tensor

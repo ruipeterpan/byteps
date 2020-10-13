@@ -249,6 +249,12 @@ void StartTask(::tensorflow::OpKernelContext* context,
   queue_list->insert(queue_list->end(), queue_list_pull->begin(),
                      queue_list_pull->end());
 
+  int my_rank =  common::byteps_rank();
+  std::string name_key(node_name);
+  std::replace(name_key.begin(), name_key.end(), '/', '_');
+  BPS_LOG(DEBUG, my_rank) << " x2682 enqueuing name_key " << name_key <<
+    " data_ptr: " << byteps_input->data() << " data_size: " << size << std::endl;
+
   // TODO: assign priority based on topological sort
   auto enqueue_result =
       EnqueueTensor(byteps_context, byteps_input, byteps_output, ready_event,
@@ -446,6 +452,7 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
       // context->op_kernel_context()->set_output(0,
       //   context->op_kernel_context()->input(0));
     }
+    bool IsExpensive() override { return true; }
 
   private:
      std::string input_tensor_name;
@@ -456,7 +463,8 @@ void PushPullKickoff(::tensorflow::OpKernelContext* context,
                std::shared_ptr<common::Tensor> byteps_output,
                std::shared_ptr<common::ReadyEvent> ready_event) {
   int my_rank =  common::byteps_rank();
-  BPS_LOG(DEBUG, my_rank) << " x2682 inserting node_name " << node_name << std::endl;
+  BPS_LOG(DEBUG, my_rank) << " x2682 entered " << __PRETTY_FUNCTION__ << " "
+    << node_name  << node_name << std::endl;
 
   auto& byteps_context = common::GetContextFromName(node_name);
   int device;
@@ -486,11 +494,12 @@ void PushPullKickoff(::tensorflow::OpKernelContext* context,
   new_args->num_waiting = 1;
 
   BPS_LOG(DEBUG, my_rank) << " x2682 inserting name_key " << name_key <<
-    " data_ptr: " << new_args->bps_in_buf << std::endl;
+    " data_ptr: " << new_args->bps_in_buf << " data_size: " << size <<
+    " out_data_ptr: " << new_args->bps_out_buf << std::endl;
   std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
   auto it = _name_to_done_args.find(name_key);
-  ASSERTF(it == _name_to_done_args.end(), std::string("duplicate tensor_name ") +
-    std::string(name_key));
+  // ASSERTF(it == _name_to_done_args.end(),
+  //         std::string("duplicate tensor_name ") + std::string(name_key));
   if (it != _name_to_done_args.end()) {
     it->second->num_waiting++;
     if (it->second->num_waiting > 1) {
@@ -502,6 +511,9 @@ void PushPullKickoff(::tensorflow::OpKernelContext* context,
   _name_to_done_args[name_key] = new_args;
   my_lk.unlock();
   _name_to_done_args_cv.notify_all();
+  /////////////
+  return;
+  /////////////
   auto enqueue_result =
       EnqueueTensor(byteps_context, byteps_input, byteps_output, ready_event,
                     device, -byteps_context.declared_key, 0,
@@ -570,6 +582,7 @@ REGISTER_OP("BytepsPushPullKickoffXla")
   .Attr("input_name: string = 'default_tensor_name'")
   .Input("input_tensor: T")
   .Output("output_tensor: T")
+  .SetIsStateful()
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
     c->set_output(0, c->input(0));
     return ::tensorflow::Status::OK();
@@ -620,11 +633,14 @@ class BytePSPushPullWaitOp : public ::tensorflow::AsyncOpKernel {
     int my_rank =  common::byteps_rank();
     OP_REQUIRES_OK_ASYNC(context, ConvertStatus(common::CheckInitialized()),
                          done);
-    BPS_LOG(DEBUG, my_rank) << " x2682 about to wait on name_key " << input_tensor_name << std::endl;
+    BPS_LOG(DEBUG, my_rank) << " x2682 about to wait on name_key "
+      << input_tensor_name
+      << " data_ptr: " << (void *) context->input(0).tensor_data().data() << std::endl;
 
     context->set_output(0, context->input(0));
-    std::thread t(WaitForTensor, input_tensor_name, done);
-    t.detach();
+    // std::thread t(WaitForTensor, input_tensor_name, done);
+    // t.detach();
+    done();
   }
 };
 

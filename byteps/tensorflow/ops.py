@@ -36,7 +36,6 @@ from byteps.common import BytePSBasics as _BytePSBasics
 from byteps.tensorflow.util import _executing_eagerly
 import tensorflow as tf
 # import traceback
-g_count = 0
 
 
 def _load_library(name):
@@ -218,7 +217,6 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None):
       A tensor of the same shape and type as `tensor`, summed across all
       processes.
     """
-    nonlocal g_count
     if name is None and not _executing_eagerly():
         name = 'BytePSPushPull_%s' % _normalize_name(tensor.name)
     if scope == '' and not _executing_eagerly():
@@ -235,11 +233,8 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None):
         full_name = "empty_name_" + randomString()
     full_name_ascii = full_name.encode("ascii")
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
-    print("xxxxxxxxxxxxxxxxxxxxxxx rank: ", local_rank(), " full_name: ", full_name)
-    if full_name == "Distributed_Push_Pull/BytePSPushPull_gradient_tape_gp_t2model_encoder_layer_11_self_attention_key_BiasAdd_BiasAddGrad_0":
-        g_count += 1
-        if g_count == 1:
-            yyyyyyyyyyyy
+    print("xxxxxxxxxxxxxxxxxxxxxxx rank: ", local_rank(), " full_name: ", \
+            full_name, " shape: ", tensor.shape, tensor)
 
     # traceback.print_stack()
     return C_LIB.byteps_push_pull_kickoff_xla(tensor, name=name, input_name = full_name)
