@@ -208,7 +208,7 @@ def _my_barrier_handle_out(handles):
 def _print_tensors(tensors, grad_names=None):
     return C_LIB.byteps_print_tensors(tensors, name=None, tensor_names = grad_names)
 
-def _push_pull_kickoff_xla(tensor, scope='', name=None):
+def _push_pull_kickoff_xla(tensor, scope='', name=None, idx=0):
     """An op which sums an input tensor over all the BytePS processes.
     The reduction operation is keyed by the name of the op. The tensor type and
     shape must be the same on all BytePS processes for a given name. The reduction
@@ -233,11 +233,12 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None):
         full_name = "empty_name_" + randomString()
     full_name_ascii = full_name.encode("ascii")
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
+    dummy_tensor = tf.ones([idx, 1], dtype = tf.int32)
     print("xxxxxxxxxxxxxxxxxxxxxxx rank: ", local_rank(), " full_name: ", \
-            full_name, " shape: ", tensor.shape, tensor)
+            full_name, " shape: ", tensor.shape, tensor, dummy_tensor)
 
     # traceback.print_stack()
-    return C_LIB.byteps_push_pull_kickoff_xla(tensor, name=name, input_name = full_name)
+    return C_LIB.byteps_push_pull_kickoff_xla(tensor, dummy_tensor, name=name, input_name = full_name)
 
 def _sync_tensor_tf_op(tensor, tensor_name=None):
     tmp_name = tensor_name.split(":")

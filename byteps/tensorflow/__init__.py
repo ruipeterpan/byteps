@@ -143,7 +143,7 @@ def push_pull_xla_handle_out(tensor, scope='', average=None, device_dense='', de
     return new_tensor, tensor_name, handle
 
 def push_pull_kickoff(tensor, scope='', average=None, device_dense='', device_sparse='',
-              compression=Compression.none, op=None, enable_async=False):
+              compression=Compression.none, op=None, enable_async=False, idx = 0):
     """Perform an push_pull on a tf.Tensor or tf.IndexedSlices.
     Arguments:
         tensor: tf.Tensor, tf.Variable, or tf.IndexedSlices to reduce.
@@ -177,7 +177,8 @@ def push_pull_kickoff(tensor, scope='', average=None, device_dense='', device_sp
         # byteps_size = tf.cast(size(), dtype=tensor.dtype)
         # tensor_compressed, ctx = compression.compress(tensor)
         tensor_compressed = tensor
-        summed_tensor_compressed = _push_pull_kickoff_xla(tensor_compressed, scope)
+        print("yyyyyyyyyyyyyyyyyy idx: ", idx)
+        summed_tensor_compressed = _push_pull_kickoff_xla(tensor_compressed, scope, idx = idx)
         tensor_name = summed_tensor_compressed.name
 
         # decompression need to go after sync
@@ -260,9 +261,9 @@ def push_pull_all_grads_half_xla_half_tf(grads, device_dense='', device_sparse='
         grads_and_names = [push_pull_kickoff(grad, scope,
                           device_dense=device_dense,
                           device_sparse=device_sparse,
-                          compression=compression)
+                          compression=compression, idx=idx)
                 if grad is not None else grad
-                for grad in grads]
+                for idx, grad in enumerate(grads)]
         # grads_and_names = list(zip(*grads_and_names))
         # tmp_grads, tmp_grad_names =
         #   list(grads_and_names[0]), list(grads_and_names[1])
@@ -733,9 +734,9 @@ if hasattr(tf, 'GradientTape'):
                     grads_and_names = [push_pull_kickoff(grad, scope,
                                       device_dense=self._device_dense,
                                       device_sparse=self._device_sparse,
-                                      compression=self._compression)
+                                      compression=self._compression, idx = idx)
                             if grad is not None else grad
-                            for grad in grads]
+                            for idx, grad in enumerate(grads)]
                     avg_grads = [_sync_tensor_tf_op(tensor, name) for tensor, name in grads_and_names]
                 return avg_grads
 

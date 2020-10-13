@@ -413,6 +413,7 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
       BPS_LOG(DEBUG, my_rank) << " x2682 inside " << __func__ << std::endl;
 
       xla::XlaOp input_tensor = context->Input(0);
+      xla::XlaOp dummy_tensor = context->Input(1);
       const ::tensorflow::TensorShape input_tensor_shape = context->InputShape(0);
       auto input_tensor_xla_shape_or =
           TensorShapeToXLAShape(context->input_xla_type(0), input_tensor_shape);
@@ -581,6 +582,7 @@ REGISTER_OP("BytepsPushPullKickoffXla")
   // .Attr("TT: {int32, int64, float16, float32, float64}")
   .Attr("input_name: string = 'default_tensor_name'")
   .Input("input_tensor: T")
+  .Input("input_dummy: int32")
   .Output("output_tensor: T")
   .SetIsStateful()
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
