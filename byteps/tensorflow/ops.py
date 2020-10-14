@@ -133,7 +133,7 @@ def _push_pull(tensor, scope='', name=None):
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
     return C_LIB.byteps_push_pull(tensor, name=name, input_name = full_name)
 
-def _push_pull_xla(tensor, scope='', name=None):
+def _push_pull_xla(tensor, scope='', name=None, idx = 0):
     """An op which sums an input tensor over all the BytePS processes.
     The reduction operation is keyed by the name of the op. The tensor type and
     shape must be the same on all BytePS processes for a given name. The reduction
@@ -158,7 +158,8 @@ def _push_pull_xla(tensor, scope='', name=None):
         full_name = "empty_name_" + randomString()
     full_name_ascii = full_name.encode("ascii")
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
-    return C_LIB.byteps_push_pull_xla(tensor, name=name, input_name = full_name)
+    dummy_tensor = tf.ones([idx, 1], dtype = tf.int32)
+    return C_LIB.byteps_push_pull_xla(tensor, dummy_tensor, name=name, input_name = full_name)
 
 def _sync_tensor(tensor, scope='', name=None, full_name=None):
     if name is None and not _executing_eagerly():

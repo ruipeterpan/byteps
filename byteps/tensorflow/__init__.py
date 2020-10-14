@@ -42,7 +42,7 @@ Sum = "Sum"
 Adasum = "Adasum"
 
 def push_pull_xla(tensor, scope='', average=None, device_dense='', device_sparse='',
-              compression=Compression.none, op=None, enable_async=False):
+              compression=Compression.none, op=None, enable_async=False, idx = 0):
     """Perform an push_pull on a tf.Tensor or tf.IndexedSlices.
     Arguments:
         tensor: tf.Tensor, tf.Variable, or tf.IndexedSlices to reduce.
@@ -74,7 +74,8 @@ def push_pull_xla(tensor, scope='', average=None, device_dense='', device_sparse
     with tf.device(device_dense):
         byteps_size = tf.cast(size(), dtype=tensor.dtype)
         tensor_compressed, ctx = compression.compress(tensor)
-        summed_tensor_compressed = _push_pull_xla(tensor_compressed, scope)
+        summed_tensor_compressed = _push_pull_xla(tensor_compressed,
+                scope, idx=idx)
         handle = summed_tensor_compressed[1]
         summed_tensor_compressed = summed_tensor_compressed[0]
         tensor_name = summed_tensor_compressed.name
@@ -691,9 +692,9 @@ if hasattr(tf, 'GradientTape'):
                     new_grads_names = [push_pull_xla(grad, scope,
                                       device_dense=self._device_dense,
                                       device_sparse=self._device_sparse,
-                                      compression=self._compression)
+                                      compression=self._compression, idx=idx)
                             if grad is not None else grad
-                            for grad in grads]
+                            for idx, grad in enumerate(grads)]
                     grads_and_names = list(zip(*new_grads_names))
                     # return list(grads_and_names[0]), list(grads_and_names[1])
                     avg_grads, grad_names = list(grads_and_names[0]), list(grads_and_names[1])
