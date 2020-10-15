@@ -178,8 +178,9 @@ def push_pull_kickoff(tensor, scope='', average=None, device_dense='', device_sp
         # byteps_size = tf.cast(size(), dtype=tensor.dtype)
         # tensor_compressed, ctx = compression.compress(tensor)
         tensor_compressed = tensor
-        summed_tensor_compressed = _push_pull_kickoff_xla(tensor_compressed, scope, idx = idx)
-        tensor_name = summed_tensor_compressed.name
+        summed_tensor_compressed, name = _push_pull_kickoff_xla(tensor_compressed, scope, idx = idx)
+        tensor_name = summed_tensor_compressed.name + str(idx)
+        # tensor_name = name
 
         # decompression need to go after sync
         # summed_tensor = compression.decompress(summed_tensor_compressed, ctx)
@@ -260,12 +261,14 @@ def push_pull_all_grads_half_xla_half_tf(grads, device_dense='', device_sparse='
                           device_sparse=device_sparse,
                           compression=compression, idx=idx)
                 if grad is not None else grad
-                for idx, grad in enumerate(grads)]
+                for idx, grad in enumerate(grads, 1)]
         # grads_and_names = list(zip(*grads_and_names))
         # tmp_grads, tmp_grad_names =
         #   list(grads_and_names[0]), list(grads_and_names[1])
+        for grad, name in grads_and_names:
+            print("xxxxxxxxxxxxxxxx rank ", rank(), " name: ", name)
 
-        avg_grads = [_sync_tensor_tf_op(tensor, name) for tensor, name in grads_and_names]
+        avg_grads = [_sync_tensor_tf_op(tensor, tensor_name = name) for tensor, name in grads_and_names]
     return avg_grads
 
 def push_pull_all_grads_all_tf_ops(grads, device_dense='', device_sparse='',
@@ -704,7 +707,7 @@ if hasattr(tf, 'GradientTape'):
                                       device_sparse=self._device_sparse,
                                       compression=self._compression, idx=idx)
                             if grad is not None else grad
-                            for idx, grad in enumerate(grads)]
+                            for idx, grad in enumerate(grads, 1)]
                     grads_and_names = list(zip(*new_grads_names))
                     # return list(grads_and_names[0]), list(grads_and_names[1])
                     avg_grads, grad_names = list(grads_and_names[0]), list(grads_and_names[1])
@@ -747,7 +750,9 @@ if hasattr(tf, 'GradientTape'):
                                       device_sparse=self._device_sparse,
                                       compression=self._compression, idx = idx)
                             if grad is not None else grad
-                            for idx, grad in enumerate(grads)]
+                            for idx, grad in enumerate(grads, 1)]
+                    for grad, name in grads_and_names:
+                        print("xxxxxxxxxxxxxxxx rank ", rank(), " name: ", name)
                     avg_grads = [_sync_tensor_tf_op(tensor, name) for tensor, name in grads_and_names]
                 return avg_grads
 

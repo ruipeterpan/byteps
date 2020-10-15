@@ -629,7 +629,8 @@ void WaitForTensor(std::string tensor_name, void *output_ptr,
               ::tensorflow::AsyncOpKernel::DoneCallback done) {
   int my_rank =  common::byteps_rank();
 
-  BPS_LOG(DEBUG, my_rank) << " x2682 going to wait on cv" << std::endl;
+  BPS_LOG(DEBUG, my_rank) << " x2682 going to wait on cv name_key: " <<
+    tensor_name << std::endl;
   std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
   _name_to_done_args_cv.wait(my_big_lk,
     [&tensor_name]{

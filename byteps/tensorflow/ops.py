@@ -229,7 +229,11 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None, idx=0):
             scope += '/'
     if not name:
         name = ''
-    full_name = scope + name
+    if idx > 1:
+        suffix = "_" + str(idx - 1)
+    else:
+        suffix = ""
+    full_name = scope + name + suffix
     if not full_name:
         full_name = "empty_name_" + randomString()
     full_name_ascii = full_name.encode("ascii")
@@ -237,7 +241,7 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None, idx=0):
     dummy_tensor = tf.ones([idx, 1], dtype = tf.int32)
 
     # traceback.print_stack()
-    return C_LIB.byteps_push_pull_kickoff_xla(tensor, dummy_tensor, name=name, input_name = full_name)
+    return C_LIB.byteps_push_pull_kickoff_xla(tensor, dummy_tensor, name=name, input_name = full_name), full_name
 
 def _sync_tensor_tf_op(tensor, tensor_name=None):
     tmp_name = tensor_name.split(":")
