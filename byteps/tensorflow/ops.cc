@@ -568,9 +568,25 @@ void customBytepsPushPullKickoffXlaOp(CUstream stream, void** buffers,
 
   buffer_size = elem_size * num_elem;
 
+    /////////////////////////////////////
+    // ::tensorflow::PlatformGpuId platform_gpu_id(0);
+    //
+    // ::tensorflow::GPUMemAllocator *sub_allocator =
+    //   new ::tensorflow::GPUMemAllocator(
+    //     ::tensorflow::GpuIdUtil::ExecutorForPlatformGpuId(platform_gpu_id).ValueOrDie(),
+    //     platform_gpu_id, false /*use_unified_memory*/, {}, {});
+    //
+    // ::tensorflow::GPUBFCAllocator *input_allocator =
+    //   new ::tensorflow::GPUBFCAllocator(sub_allocator, buffer_size, "GPU_0_bfc");
+    //
+    // ::tensorflow::Tensor inputTensor(input_allocator, dt_type, ::tensorflow::TensorShape({num_elem}));
+    //
+    // void *inputTensor_flat = const_cast<void *>((const void *)(inputTensor.tensor_data().data()));
+    /////////////////////////////////////
   // auto bps_input = std::make_shared<XlaTensor>(buffers[1], num_elem, dt_type, buffer_size);
   // auto bps_output = std::make_shared<XlaTensor>(buffers[1], num_elem, dt_type, buffer_size);
 
+  ::tensorflow::Tensor x(::tensorflow::DT_FLOAT, ::tensorflow::TensorShape({100, 32}));
   void *dev_ptr;
   cudaMalloc(&dev_ptr, buffer_size);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamalloc " << __func__ << std::endl;
@@ -611,6 +627,7 @@ void WaitForTensor(std::string tensor_name, void *output_ptr,
               ::tensorflow::AsyncOpKernel::DoneCallback done) {
   int my_rank =  common::byteps_rank();
 
+  BPS_LOG(DEBUG, my_rank) << " x2682 going to wait on cv" << std::endl;
   std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
   _name_to_done_args_cv.wait(my_big_lk,
     [&tensor_name]{
@@ -629,16 +646,21 @@ void WaitForTensor(std::string tensor_name, void *output_ptr,
       std::this_thread::yield();
       return args->is_done;});
     lk.unlock();
+  BPS_LOG(DEBUG, my_rank) << " x2682 wait on " << tensor_name << " done" << std::endl;
   }
 
-  // auto stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
-  // cudaMemcpyAsync(output_ptr, args->bps_out_buf,
-  //   args->bps_buf_size, cudaMemcpyDeviceToDevice, *stream);
-  cudaMemcpy(output_ptr, args->bps_out_buf,
-    args->bps_buf_size, cudaMemcpyDeviceToDevice);
+  auto stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
+  BPS_LOG(DEBUG, my_rank) << " x2682 before cudamemcpy " << __func__ << std::endl;
+  cudaMemcpyAsync(output_ptr, args->bps_out_buf,
+    args->bps_buf_size, cudaMemcpyDeviceToDevice, *stream);
+  // cudaMemcpy(output_ptr, args->bps_out_buf,
+  //   args->bps_buf_size, cudaMemcpyDeviceToDevice);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamemcpyasync " << __func__ << std::endl;
-  // cudaStreamSynchronize(*stream);
+  cudaStreamSynchronize(*stream);
 
+    std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
+    _name_to_done_args.erase(tensor_name);
+    my_lk.unlock();
   BPS_LOG(DEBUG, my_rank) << " x2682 wait done on name_key " << tensor_name << std::endl;
   done();
 }
@@ -662,7 +684,16 @@ class BytePSPushPullWaitOp : public ::tensorflow::AsyncOpKernel {
       << " data_ptr: " << (void *) context->input(0).tensor_data().data() << std::endl;
 
     std::string tmp_name = input_tensor_name;
+
+    std::unique_lock<std::mutex> my_big_lk(_name_to_done_args_mtx);
+    _name_to_done_args_cv.wait(my_big_lk,
+      [&tmp_name]{
+        std::this_thread::yield();
+        return _name_to_done_args.find(tmp_name) != _name_to_done_args.end();
+      });
+
     auto args = _name_to_done_args[tmp_name];
+    my_big_lk.unlock();
     auto expecting = args->bps_out_buf;
     auto got_ptr = (void *) context->input(0).data();
     if (got_ptr != expecting) {
@@ -679,6 +710,7 @@ class BytePSPushPullWaitOp : public ::tensorflow::AsyncOpKernel {
     void *output_ptr = (void *) context->input(0).data();
     std::thread t(WaitForTensor, input_tensor_name, output_ptr, done);
     t.detach();
+    BPS_LOG(DEBUG, my_rank) << " x2682 detatched name_key: " << tmp_name << std::endl;
     // done();
   }
 };
