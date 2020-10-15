@@ -229,10 +229,13 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None, idx=0):
             scope += '/'
     if not name:
         name = ''
-    if idx > 1:
-        suffix = "_" + str(idx - 1)
-    else:
+    if not isinstance(tensor, tf.Variable):
         suffix = ""
+    elif idx == 1:
+        suffix = ""
+    else:
+        suffix = "_" + str(idx - 1)
+
     full_name = scope + name + suffix
     if not full_name:
         full_name = "empty_name_" + randomString()

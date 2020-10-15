@@ -265,8 +265,8 @@ def push_pull_all_grads_half_xla_half_tf(grads, device_dense='', device_sparse='
         # grads_and_names = list(zip(*grads_and_names))
         # tmp_grads, tmp_grad_names =
         #   list(grads_and_names[0]), list(grads_and_names[1])
-        for grad, name in grads_and_names:
-            print("xxxxxxxxxxxxxxxx rank ", rank(), " name: ", name)
+        # for grad, name in grads_and_names:
+        #     print("xxxxxxxxxxxxxxxx rank ", rank(), " name: ", name)
 
         avg_grads = [_sync_tensor_tf_op(tensor, tensor_name = name) for tensor, name in grads_and_names]
     return avg_grads
