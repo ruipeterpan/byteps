@@ -235,8 +235,6 @@ def _push_pull_kickoff_xla(tensor, scope='', name=None, idx=0):
     full_name_ascii = full_name.encode("ascii")
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
     dummy_tensor = tf.ones([idx, 1], dtype = tf.int32)
-    print("xxxxxxxxxxxxxxxxxxxxxxx rank: ", local_rank(), " full_name: ", \
-            full_name, " shape: ", tensor.shape, tensor, dummy_tensor)
 
     # traceback.print_stack()
     return C_LIB.byteps_push_pull_kickoff_xla(tensor, dummy_tensor, name=name, input_name = full_name)

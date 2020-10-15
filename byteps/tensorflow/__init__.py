@@ -178,7 +178,6 @@ def push_pull_kickoff(tensor, scope='', average=None, device_dense='', device_sp
         # byteps_size = tf.cast(size(), dtype=tensor.dtype)
         # tensor_compressed, ctx = compression.compress(tensor)
         tensor_compressed = tensor
-        print("yyyyyyyyyyyyyyyyyy idx: ", idx)
         summed_tensor_compressed = _push_pull_kickoff_xla(tensor_compressed, scope, idx = idx)
         tensor_name = summed_tensor_compressed.name
 
@@ -224,9 +223,6 @@ def push_pull_all_grads_sync_one_shot_xla(grads, device_dense='', device_sparse=
 def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
                             compression=Compression.none, sparse_as_dense=False):
     """ returns a list """
-    for item in grads:
-        print("rank = ", local_rank, item)
-    # sys.exit(0)
     with tf.name_scope('xxxxDistributedGradientTape' + "_Push_Pull") as scope:
         if sparse_as_dense:
             grads = [tf.convert_to_tensor(grad)
@@ -272,6 +268,20 @@ def push_pull_all_grads_half_xla_half_tf(grads, device_dense='', device_sparse='
         avg_grads = [_sync_tensor_tf_op(tensor, name) for tensor, name in grads_and_names]
     return avg_grads
 
+def push_pull_all_grads_all_tf_ops(grads, device_dense='', device_sparse='',
+                            compression=Compression.none, sparse_as_dense=False):
+    with tf.name_scope('DistributedGradientTape' + "_Push_Pull") as scope:
+        if sparse_as_dense:
+            grads = [tf.convert_to_tensor(grad)
+                     if grad is not None and isinstance(grad, tf.IndexedSlices)
+                     else grad for grad in grads]
+        return [hvd.push_pull(grad, scope,
+                          device_dense=device_dense,
+                          device_sparse=device_sparse,
+                          compression=compression)
+                if grad is not None else grad
+                for grad in grads]
+
 enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
 if enable_xla == '1':
     # push_pull_all_grads_xla = push_pull_all_grads_sync_one_shot_xla
@@ -282,8 +292,8 @@ if enable_xla == '1':
 
     push_pull_all_grads_xla = push_pull_all_grads_half_xla_half_tf
     push_pull_all_grads = push_pull_all_grads_half_xla_half_tf
-# else:
-#     self._push_pull_grads = push_pull_grads
+else:
+    push_pull_all_grads = push_pull_all_grads_all_tf_ops
 
 def push_pull(tensor, scope='', average=None, device_dense='', device_sparse='',
               compression=Compression.none, op=None, enable_async=False):
@@ -741,7 +751,7 @@ if hasattr(tf, 'GradientTape'):
                     avg_grads = [_sync_tensor_tf_op(tensor, name) for tensor, name in grads_and_names]
                 return avg_grads
 
-            enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
+            # enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
             if enable_xla == '1':
                 # self._push_pull_grads = push_pull_grads_xla
                 # self._push_pull_grads = push_pull_grads_xla_wrapper

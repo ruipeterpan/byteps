@@ -586,13 +586,15 @@ void customBytepsPushPullKickoffXlaOp(CUstream stream, void** buffers,
   // auto bps_input = std::make_shared<XlaTensor>(buffers[1], num_elem, dt_type, buffer_size);
   // auto bps_output = std::make_shared<XlaTensor>(buffers[1], num_elem, dt_type, buffer_size);
 
-  ::tensorflow::Tensor x(::tensorflow::DT_FLOAT, ::tensorflow::TensorShape({100, 32}));
+  // ::tensorflow::Tensor x(::tensorflow::DT_FLOAT, ::tensorflow::TensorShape({100, 32}));
   void *dev_ptr;
   cudaMalloc(&dev_ptr, buffer_size);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamalloc " << __func__ << std::endl;
 
   // cudaMemcpyAsync(buffers[1], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
   cudaMemcpyAsync(dev_ptr, buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
+
+  // cudaMemcpyAsync((void *) x.tensor_data().data(), buffers[0], 4, cudaMemcpyDeviceToDevice, stream);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamemcpyasync " << __func__ << std::endl;
   cudaStreamSynchronize(stream);
   auto bps_input = std::make_shared<XlaTensor>(dev_ptr, num_elem, dt_type, buffer_size);
@@ -649,14 +651,15 @@ void WaitForTensor(std::string tensor_name, void *output_ptr,
   BPS_LOG(DEBUG, my_rank) << " x2682 wait on " << tensor_name << " done" << std::endl;
   }
 
-  auto stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
+  // auto stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
   BPS_LOG(DEBUG, my_rank) << " x2682 before cudamemcpy " << __func__ << std::endl;
-  cudaMemcpyAsync(output_ptr, args->bps_out_buf,
-    args->bps_buf_size, cudaMemcpyDeviceToDevice, *stream);
-  // cudaMemcpy(output_ptr, args->bps_out_buf,
-  //   args->bps_buf_size, cudaMemcpyDeviceToDevice);
+  // cudaMemcpyAsync(output_ptr, args->bps_out_buf,
+  //   args->bps_buf_size, cudaMemcpyDeviceToDevice, *stream);
+  cudaMemcpy(output_ptr, args->bps_out_buf,
+    args->bps_buf_size, cudaMemcpyDeviceToDevice);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamemcpyasync " << __func__ << std::endl;
-  cudaStreamSynchronize(*stream);
+  // cudaStreamSynchronize(*stream);
+  cudaFree(args->bps_out_buf);
 
     std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
     _name_to_done_args.erase(tensor_name);
