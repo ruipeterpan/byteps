@@ -82,6 +82,7 @@ struct Xla_done_cb_args{
   bool is_done;
   void *bps_out_buf;
   void *bps_in_buf;
+  std::shared_ptr<::tensorflow::Tensor> output_tensor;
   int bps_buf_size;
   int num_waiting;
 };

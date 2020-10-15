@@ -418,10 +418,10 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
       xla::XlaOp input_tensor = context->Input(0);
       xla::XlaOp dummy_tensor = context->Input(1);
       const ::tensorflow::TensorShape input_tensor_shape = context->InputShape(0);
-      auto input_tensor_xla_shape_or =
+      auto input_tensor_xla_shape =
           TensorShapeToXLAShape(context->input_xla_type(0), input_tensor_shape);
-      // xla::Shape output_tensor_shape = input_tensor_xla_shape_or.ValueOrDie();
-      xla::Shape output_tensor_shape = input_tensor_xla_shape_or;
+      // xla::Shape output_tensor_xla_shape = input_tensor_xla_shape_or.ValueOrDie();
+      // xla::Shape output_tensor_xla_shape = input_tensor_xla_shape;
 
       auto node_name = name();
       std::string tmp_name;
@@ -441,17 +441,17 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
       std::stringstream ss;
       ss << tmp_name;
       ss << " " << context->input_type(0);
-      ss << " " << xla::ShapeUtil::ByteSizeOfPrimitiveType(output_tensor_shape.element_type());
-      ss << " " << output_tensor_shape.rank();
-      for (int i = 0; i < output_tensor_shape.rank(); i++) {
-        ss << " " << output_tensor_shape.dimensions(i) ;
+      ss << " " << xla::ShapeUtil::ByteSizeOfPrimitiveType(input_tensor_xla_shape.element_type());
+      ss << " " << input_tensor_xla_shape.rank();
+      for (int i = 0; i < input_tensor_xla_shape.rank(); i++) {
+        ss << " " << input_tensor_xla_shape.dimensions(i) ;
       }
       ss << std::endl;
-      auto output_shape = xla::ShapeUtil::MakeShape(xla::S32, {2});
+      auto output_xla_shape = xla::ShapeUtil::MakeShape(xla::S32, {1});
       context->SetOutput(
         0, xla::CustomCall(context->builder(),
           /*call_target_name=*/"customBytepsPushPullKickoffXlaOp",
-          {input_tensor}, output_tensor_shape, ss.str()));
+          {input_tensor}, output_xla_shape, ss.str()));
 
       // context->op_kernel_context()->set_output(0,
       //   context->op_kernel_context()->input(0));
@@ -465,7 +465,8 @@ class BytepsPushPullKickoffXlaOp : public ::tensorflow::XlaOpKernel {
 void PushPullKickoff(::tensorflow::OpKernelContext* context,
                std::string node_name, std::shared_ptr<common::Tensor> byteps_input,
                std::shared_ptr<common::Tensor> byteps_output,
-               std::shared_ptr<common::ReadyEvent> ready_event) {
+               std::shared_ptr<common::ReadyEvent> ready_event,
+               std::shared_ptr<::tensorflow::Tensor> output_tensor) {
   int my_rank =  common::byteps_rank();
   BPS_LOG(DEBUG, my_rank) << " x2682 entered " << __PRETTY_FUNCTION__ << " "
     << node_name  << node_name << std::endl;
@@ -494,6 +495,7 @@ void PushPullKickoff(::tensorflow::OpKernelContext* context,
   new_args->is_done = false;
   new_args->bps_out_buf = const_cast<void *>(byteps_output->data());
   new_args->bps_in_buf = const_cast<void *>(byteps_input->data());
+  new_args->output_tensor = output_tensor;
   new_args->bps_buf_size = size;
   new_args->num_waiting = 1;
 
@@ -548,6 +550,7 @@ void customBytepsPushPullKickoffXlaOp(CUstream stream, void** buffers,
   std::stringstream ss(opaque);
   std::string tmp_name;
   ::tensorflow::OpKernelContext* context = nullptr;
+  ::tensorflow::TensorShape output_tensor_shape();
 
   ss >> tmp_name;
   ::tensorflow::DataType dt_type;
@@ -564,6 +567,7 @@ void customBytepsPushPullKickoffXlaOp(CUstream stream, void** buffers,
     size_t dim;
     ss >> std::dec >> dim;
     num_elem *= dim;
+    output_tensor_shape.AddDim(dim);
   }
 
   buffer_size = elem_size * num_elem;
@@ -587,21 +591,24 @@ void customBytepsPushPullKickoffXlaOp(CUstream stream, void** buffers,
   // auto bps_output = std::make_shared<XlaTensor>(buffers[1], num_elem, dt_type, buffer_size);
 
   // ::tensorflow::Tensor x(::tensorflow::DT_FLOAT, ::tensorflow::TensorShape({100, 32}));
-  void *dev_ptr;
-  cudaMalloc(&dev_ptr, buffer_size);
+  auto output_tensor = std::shared_ptr<::tensorflow::Tensor>(
+    :tensorflow::Tensor(::tensorflow::DT_FLOAT, output_tensor_shape));
+  // void *dev_ptr;
+  // cudaMalloc(&dev_ptr, buffer_size);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamalloc " << __func__ << std::endl;
 
   // cudaMemcpyAsync(buffers[1], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
-  cudaMemcpyAsync(dev_ptr, buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
+  // cudaMemcpyAsync(dev_ptr, buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
 
-  // cudaMemcpyAsync((void *) x.tensor_data().data(), buffers[0], 4, cudaMemcpyDeviceToDevice, stream);
+  cudaMemcpyAsync((void *) output_tensor.tensor_data().data(), buffers[0], 4, cudaMemcpyDeviceToDevice, stream);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamemcpyasync " << __func__ << std::endl;
   cudaStreamSynchronize(stream);
-  auto bps_input = std::make_shared<XlaTensor>(dev_ptr, num_elem, dt_type, buffer_size);
+  // auto bps_input = std::make_shared<XlaTensor>(dev_ptr, num_elem, dt_type, buffer_size);
+  auto bps_input = std::make_shared<TFTensor>(tensor);
   auto ready_event =
     std::shared_ptr<common::ReadyEvent>(RecordReadyEvent(stream));
 
-  std::thread t(PushPullKickoff, context, tmp_name, bps_input, bps_input, ready_event);
+  std::thread t(PushPullKickoff, context, tmp_name, bps_input, bps_input, ready_event, output_tensor);
   t.detach();
   // std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -614,7 +621,8 @@ REGISTER_OP("BytepsPushPullKickoffXla")
   .Attr("input_name: string = 'default_tensor_name'")
   .Input("input_tensor: T")
   .Input("input_dummy: int32")
-  .Output("output_tensor: T")
+  // .Output("output_tensor: T")
+  .Output("output_tensor: int32")
   .SetIsStateful()
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
     c->set_output(0, c->input(0));
@@ -656,11 +664,11 @@ void WaitForTensor(std::string tensor_name, void *output_ptr,
   BPS_LOG(DEBUG, my_rank) << " x2682 before cudamemcpy " << __func__ << std::endl;
   // cudaMemcpyAsync(output_ptr, args->bps_out_buf,
   //   args->bps_buf_size, cudaMemcpyDeviceToDevice, *stream);
-  cudaMemcpy(output_ptr, args->bps_out_buf,
-    args->bps_buf_size, cudaMemcpyDeviceToDevice);
+  // cudaMemcpy(output_ptr, args->bps_out_buf,
+  //   args->bps_buf_size, cudaMemcpyDeviceToDevice);
   BPS_LOG(DEBUG, my_rank) << " x2682 after cudamemcpyasync " << __func__ << std::endl;
   // cudaStreamSynchronize(*stream);
-  cudaFree(args->bps_out_buf);
+  // cudaFree(args->bps_out_buf);
 
     std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
     _name_to_done_args.erase(tensor_name);
@@ -710,7 +718,8 @@ class BytePSPushPullWaitOp : public ::tensorflow::AsyncOpKernel {
         << std::endl;
     }
 
-    context->set_output(0, context->input(0));
+    // context->set_output(0, context->input(0));
+    context->set_output(0, args->output_tensor);
     void *output_ptr = (void *) context->input(0).data();
     std::thread t(WaitForTensor, input_tensor_name, output_ptr, done);
     t.detach();
@@ -723,7 +732,8 @@ REGISTER_OP("BytepsPushPullWait")
   .Attr("T: {int32, int64, float16, float32, float64}")
   // .Attr("TT: {int32, int64, float16, float32, float64}")
   .Attr("input_name: string = 'default_tensor_name'")
-  .Input("input_tensor: T")
+  // .Input("input_tensor: T")
+  .Input("input_tensor: int32")
   .Output("output_tensor: T")
   .SetShapeFn([](::tensorflow::shape_inference::InferenceContext* c) {
     c->set_output(0, c->input(0));
