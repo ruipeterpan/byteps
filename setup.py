@@ -999,7 +999,8 @@ setup(
         'Programming Language :: Python :: Implementation :: PyPy',
         'Operating System :: POSIX :: Linux'
     ],
-    ext_modules=[server_lib, tensorflow_lib, mxnet_lib, pytorch_lib],
+    # ext_modules=[server_lib, tensorflow_lib, mxnet_lib, pytorch_lib],
+    ext_modules=[server_lib, tensorflow_lib],
     # $ setup.py publish support.
     cmdclass={
         'upload': UploadCommand,

@@ -133,7 +133,7 @@ def _push_pull(tensor, scope='', name=None):
     TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
     return C_LIB.byteps_push_pull(tensor, name=name, input_name = full_name)
 
-def _push_pull_xla(tensor, scope='', name=None, idx = 0):
+def _push_pull_xla(tensor, scope='', name=None, idx = 1):
     """An op which sums an input tensor over all the BytePS processes.
     The reduction operation is keyed by the name of the op. The tensor type and
     shape must be the same on all BytePS processes for a given name. The reduction
@@ -205,6 +205,51 @@ def _sync_tensors_handle_out(handle, tensor, tensor_name=None):
 
 def _my_barrier_handle_out(handles):
     return C_LIB.my_barrier_handle_out(handles)
+
+def _push_pull_xla_v2(tensor, scope='', name=None, idx = 1):
+    """An op which sums an input tensor over all the BytePS processes.
+    The reduction operation is keyed by the name of the op. The tensor type and
+    shape must be the same on all BytePS processes for a given name. The reduction
+    will not start until all processes are ready to send and receive the tensor.
+    Returns:
+      A tensor of the same shape and type as `tensor`, summed across all
+      processes.
+    """
+    if name is None and not _executing_eagerly():
+        name = 'BytePSPushPull_%s' % _normalize_name(tensor.name)
+    if scope == '' and not _executing_eagerly():
+        if 'v1' in dir(tf.compat):
+            scope = tf.compat.v1.get_default_graph().get_name_scope()
+        else:
+            scope = tf.get_default_graph().get_name_scope()
+        if scope != '':
+            scope += '/'
+    if not name:
+        name = ''
+    full_name = scope + name
+    if not full_name:
+        full_name = "empty_name_" + randomString()
+    full_name_ascii = full_name.encode("ascii")
+    TF_LIB_CTYPES.byteps_tensorflow_declare_tensor(ctypes.c_char_p(full_name_ascii))
+    dummy_tensor = tf.ones([idx, 1], dtype = tf.int32)
+    return C_LIB.byteps_push_pull_xla_v2(tensor, dummy_tensor, name=name, input_name = full_name)
+
+def _sync_tensors_handle_out_only(handle, tensor, tensor_name=None):
+    tmp_name = tensor_name.split(":")
+    tmp_name = ":".join(tmp_name[:-1])
+    tmp_name = _normalize_name(tmp_name)
+
+    return C_LIB.byteps_sync_tensor_handle_out_only(handle, tensor, name=None,
+            tensor_name = tmp_name)
+
+def _sync_tensors_handle_out_v2(tensor, handle, tensor_name=None):
+    tmp_name = tensor_name.split(":")
+    tmp_name = ":".join(tmp_name[:-1])
+    tmp_name = _normalize_name(tmp_name)
+
+    return C_LIB.byteps_sync_tensor_handle_out_v2(tensor, handle, name=None,
+            tensor_name = tmp_name)
+
 
 def _print_tensors(tensors, grad_names=None):
     return C_LIB.byteps_print_tensors(tensors, name=None, tensor_names = grad_names)
