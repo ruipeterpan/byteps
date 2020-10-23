@@ -1855,6 +1855,8 @@ void StartTaskWrapperV2(CUstream stream, void** buffers,
   // cudaStreamSynchronize(*my_stream);
   // auto ready_event =
   //   std::shared_ptr<common::ReadyEvent>(RecordReadyEvent(*my_stream));
+  cudaMemcpyAsync(buffers[1], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
+  cudaStreamSynchronize(stream);
   auto ready_event =
     std::shared_ptr<common::ReadyEvent>(RecordReadyEvent(stream));
 
@@ -2004,9 +2006,11 @@ void SyncTensorHandleOutCustomOpV2(CUstream stream, void** buffers,
     }
     lk.unlock();
 
-    auto my_stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
-    cudaMemcpyAsync(buffers[2], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, *my_stream);
-    cudaStreamSynchronize(*my_stream);
+    // auto my_stream = byteps::common::BytePSGlobal::GetCopyDevice2DeviceStream();
+    // cudaMemcpyAsync(buffers[2], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, *my_stream);
+    // cudaStreamSynchronize(*my_stream);
+    cudaMemcpyAsync(buffers[2], buffers[0], buffer_size, cudaMemcpyDeviceToDevice, stream);
+    cudaStreamSynchronize(stream);
     // printMatOnGPU(tmp_name, got_ptr, buffer_size/4);
   }
   std::unique_lock<std::mutex> my_lk(_name_to_done_args_mtx);
