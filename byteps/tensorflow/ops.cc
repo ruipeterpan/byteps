@@ -1816,6 +1816,7 @@ void StartTaskXlaV2(::tensorflow::OpKernelContext* context,
                     },
                     queue_list);
   if (ConvertStatus(enqueue_result) != ::tensorflow::Status::OK()) {
+    BPS_LOG(DEBUG, my_rank) << " x2682 status not ok name_key " << name_key << std::flush;
     assert(0);
   }
 }
