@@ -242,12 +242,13 @@ def _sync_tensors_handle_out_only(handle, tensor, tensor_name=None):
     return C_LIB.byteps_sync_tensor_handle_out_only(handle, tensor, name=None,
             tensor_name = tmp_name)
 
-def _sync_tensors_handle_out_v2(tensor, handle, tensor_name=None):
+def _sync_tensors_handle_out_v2(tensor, handle, tensor_name=None, idx = 1):
     tmp_name = tensor_name.split(":")
     tmp_name = ":".join(tmp_name[:-1])
     tmp_name = _normalize_name(tmp_name)
 
-    return C_LIB.byteps_sync_tensor_handle_out_v2(tensor, handle, name=None,
+    dummy_tensor = tf.ones([idx, 1], dtype = tf.int32)
+    return C_LIB.byteps_sync_tensor_handle_out_v2(tensor, handle, dummy_tensor, name=None,
             tensor_name = tmp_name)
 
 

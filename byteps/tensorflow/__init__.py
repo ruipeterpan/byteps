@@ -327,7 +327,7 @@ def push_pull_all_grads_handle_xla(grads, device_dense='', device_sparse='',
     avg_grads = [tf.cond(item[0] > item[1], \
             lambda: tf.identity(aa), \
             lambda: tf.identity(aa)) for item, aa in new_handles_grads]
-    avg_grads = _print_tensors(avg_grads, grad_names)
+    # avg_grads = _print_tensors(avg_grads, grad_names)
     return avg_grads
 
 def push_pull_all_grads_handle_xla_v2(grads, device_dense='', device_sparse='',
@@ -350,7 +350,8 @@ def push_pull_all_grads_handle_xla_v2(grads, device_dense='', device_sparse='',
           list(grads_and_names_and_handles[2])
 
     barrier_handle = _my_barrier_handle_out(handles)
-    avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item) for tensor, item in zip(avg_grads, grad_names)]
+    # avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item) for tensor, item in zip(avg_grads, grad_names)]
+    avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item, idx = idx) for idx, (tensor, item) in enumerate(zip(avg_grads, grad_names), 1)]
     # avg_grads = _print_tensors(avg_grads, grad_names)
     return avg_grads
 
@@ -391,12 +392,37 @@ def push_pull_all_grads_all_tf_ops(grads, device_dense='', device_sparse='',
                 if grad is not None else grad
                 for grad in grads]
 
+def push_pull_all_grads_dummy(grads, device_dense='', device_sparse='',
+                            compression=Compression.none, sparse_as_dense=False):
+    with tf.name_scope('zzzzDistributedGradientTape' + "_Push_Pull") as scope:
+        if sparse_as_dense:
+            grads = [tf.convert_to_tensor(grad)
+                     if grad is not None and isinstance(grad, tf.IndexedSlices)
+                     else grad for grad in grads]
+        new_grads_names_and_handles = [push_pull_xla_handle_out_v2(grad, scope,
+                          device_dense=device_dense,
+                          device_sparse=device_sparse,
+                          compression=compression, idx = idx)
+                if grad is not None else grad
+                for idx, grad in enumerate(grads, 1)]
+        grads_and_names_and_handles = list(zip(*new_grads_names_and_handles))
+        avg_grads, grad_names, handles = \
+          list(grads_and_names_and_handles[0]), list(grads_and_names_and_handles[1]), \
+          list(grads_and_names_and_handles[2])
+    barrier_handle = _my_barrier_handle_out(handles)
+    avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item, idx = idx) for idx, (tensor, item) in enumerate(zip(avg_grads, grad_names), 1)]
+
+
+    # avg_grads = [_sync_tensors_handle_out_v2(tensor, barrier_handle, tensor_name=item) for tensor, item, barrier_handle in zip(avg_grads, grad_names, handles)]
+    return avg_grads
+
 enable_xla = os.environ.get('BYTEPS_ENABLE_XLA', '0')
 if enable_xla == '1':
     # push_pull_all_grads = push_pull_all_grads_sync_one_shot_xla
     # push_pull_all_grads = push_pull_all_grads_sync_one_shot_xla_wrapper
     # push_pull_all_grads = push_pull_all_grads_handle_xla
     push_pull_all_grads = push_pull_all_grads_handle_xla_v2
+    # push_pull_all_grads = push_pull_all_grads_dummy
     # push_pull_all_grads = push_pull_all_grads_half_xla_half_tf
 else:
     push_pull_all_grads = push_pull_all_grads_all_tf_ops
