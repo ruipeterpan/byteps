@@ -868,7 +868,7 @@ class BarrierHandleOutXlaOp : public ::tensorflow::XlaOpKernel {
     std::vector<::tensorflow::TensorShape> shapes;
     OP_REQUIRES_OK(ctx, ctx->InputList("values", &values, &shapes));
 
-    std::cout << "my_name is " << name() << std::endl;
+    // std::cout << "my_name is " << name() << std::endl;
     // S32 is int32
     auto out_shapes = xla::ShapeUtil::MakeTupleShape({
       xla::ShapeUtil::MakeShape(xla::S32, {2})
