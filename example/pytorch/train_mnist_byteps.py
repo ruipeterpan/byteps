@@ -119,6 +119,16 @@ def train(epoch):
         output = model(data)
         loss = F.nll_loss(output, target)
         loss.backward()
+        
+        old_grad_norm_sum = torch.zeros(1)
+        for param in model.parameters():
+            old_grad_norm_sum += torch.norm(param.grad.data)
+
+        # the operation of averaging the gradients should happen here
+        # this push_pull is added by Rui
+#         for param in model.parameters():      
+#             param.grad.data = push_pull(param.grad.data, average=True, name="placeholder")
+        
         optimizer.step()
         if batch_idx % args.log_interval == 0:
             # BytePS: use train_sampler to determine the number of examples in
@@ -126,6 +136,12 @@ def train(epoch):
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 epoch, batch_idx * len(data), len(train_sampler),
                 100. * batch_idx / len(train_loader), loss.item()))
+            new_grad_norm_sum = torch.zeros(1)
+            for param in model.parameters():
+                new_grad_norm_sum += torch.norm(param.grad.data)
+            if (new_grad_norm_sum != old_grad_norm_sum):
+                print("gradient was updated sometime before optimizer.step()") # this is happening... hmmm...
+                print("old gradient norm sum is", old_grad_norm_sum, "and new ... is", new_grad_norm_sum)
 
 
 def metric_average(val, name):
