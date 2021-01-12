@@ -69,7 +69,7 @@ def _push_pull_group_function_factory(tensor):
 def _do_push_pull_async(tensor, output, average, name, version=0, priority=0):
     c_lib.byteps_torch_declare_tensor(name.encode() if name is not None else _NULL)
     function = _check_function(_push_pull_function_factory, tensor)
-    handle = getattr(c_lib, function)(tensor, output, 1 if average else 0,
+    handle = getattr(c_lib, function)(tensor, output, average,
                                       name.encode() if name is not None else _NULL,
                                       version, priority)
     _handle_map[handle] = (tensor, output)
@@ -78,7 +78,7 @@ def _do_push_pull_async(tensor, output, average, name, version=0, priority=0):
 def _do_push_pull_group_sync(tensor, output, average, name, version=0, priority=0):
     c_lib.byteps_torch_declare_tensor(name.encode() if name is not None else _NULL)
     function = _check_function(_push_pull_group_function_factory, tensor)
-    handle, curr_count = getattr(c_lib, function)(tensor, output, 1 if average else 0,
+    handle, curr_count = getattr(c_lib, function)(tensor, output, average,
                                       name.encode() if name is not None else _NULL,
                                       version, priority)
     _handle_map[handle] = (tensor, output)
