@@ -180,7 +180,7 @@ def worker(local_rank, local_size, command, allocation=None):
 
 def launch_bps():
     curr_time = datetime.now().strftime("%H:%M:%S")
-    print(f"[{curr_time}] BytePS launching {os.environ["DMLC_ROLE"]}")
+    print(curr_time + " BytePS launching " + os.environ["DMLC_ROLE"])
     sys.stdout.flush()
     check_env()
     if os.environ["DMLC_ROLE"] == "worker":
