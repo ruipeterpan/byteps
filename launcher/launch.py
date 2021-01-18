@@ -7,6 +7,7 @@ import subprocess
 import threading
 import sys
 import time
+from datetime import datetime
 from functools import reduce
 
 
@@ -178,7 +179,7 @@ def worker(local_rank, local_size, command, allocation=None):
 
 
 def launch_bps():
-    print("BytePS launching " + os.environ["DMLC_ROLE"])
+    print(f"[{datetime.now().strftime("%H:%M:%S")}] BytePS launching {os.environ["DMLC_ROLE"]}")
     sys.stdout.flush()
     check_env()
     if os.environ["DMLC_ROLE"] == "worker":
