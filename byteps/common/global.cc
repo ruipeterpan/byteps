@@ -389,8 +389,14 @@ void BytePSGlobal::Shutdown() {
   BPS_LOG(DEBUG) << "Timestamp 8"
                  << " (rank=" << _local_rank << ")";
   _basic_comm.reset();
+  BPS_LOG(DEBUG) << "Timestamp 8.1"
+                 << " (rank=" << _local_rank << ")";
   _shm_obj.reset();
+  BPS_LOG(DEBUG) << "Timestamp 8.2"
+                 << " (rank=" << _local_rank << ")";
   _cpu_reducer.reset();
+  BPS_LOG(DEBUG) << "Timestamp 8.3"
+                 << " (rank=" << _local_rank << ")";
   _nccl_manager.reset();
   BPS_LOG(DEBUG) << "Timestamp 9"
                  << " (rank=" << _local_rank << ")";
