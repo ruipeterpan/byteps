@@ -321,7 +321,8 @@ void BytePSGlobal::Shutdown() {
                  << " (rank=" << _local_rank << ")";
   _should_shutdown = true;
   int total_thread_num = _threads.size();
-
+  BPS_LOG(DEBUG) << "Timestamp 1"
+                 << " (rank=" << _local_rank << ")";
   for (size_t i = 0; i < _threads.size(); i++) {
     if (_threads[i]->joinable()) {
       _threads[i]->join();
@@ -329,35 +330,42 @@ void BytePSGlobal::Shutdown() {
       _threads[i] = NULL;
     }
   }
-
+  BPS_LOG(DEBUG) << "Timestamp 2"
+                 << " (rank=" << _local_rank << ")";
   while (!IsAllThreadFinish(total_thread_num)) {
     // wait until all threads joined
     std::this_thread::sleep_for(std::chrono::nanoseconds(1000));
   }
-
+  BPS_LOG(DEBUG) << "Timestamp 3"
+                 << " (rank=" << _local_rank << ")";
   for (size_t i = 0; i < QueueNum; i++) {
     if (_queues[i]) {
       delete _queues[i];
       _queues[i] = NULL;
     }
   }
-
+  BPS_LOG(DEBUG) << "Timestamp 4"
+                 << " (rank=" << _local_rank << ")";
   if (_ps) {
     // shutdown _ps and wait for the completion acks of other workers/servers
     ps::Finalize(0, true);
     delete _ps;
     _ps = NULL;
   }
-
+  BPS_LOG(DEBUG) << "Timestamp 5"
+                 << " (rank=" << _local_rank << ")";
   if (_copy_device2host_stream) {
     CUDA_CALL(cudaStreamDestroy(*_copy_device2host_stream));
     _copy_device2host_stream = NULL;
   }
+  BPS_LOG(DEBUG) << "Timestamp 6"
+                 << " (rank=" << _local_rank << ")";
   if (_copy_host2device_stream) {
     CUDA_CALL(cudaStreamDestroy(*_copy_host2device_stream));
     _copy_host2device_stream = NULL;
   }
-
+  BPS_LOG(DEBUG) << "Timestamp 7"
+                 << " (rank=" << _local_rank << ")";
   if (_reduce_table) {
     delete _reduce_table;
     _reduce_table = NULL;
@@ -374,17 +382,18 @@ void BytePSGlobal::Shutdown() {
     delete _push_table;
     _push_table = NULL;
   }
-
   if (_copy_table) {
     delete _copy_table;
     _copy_table = NULL;
   }
-
+  BPS_LOG(DEBUG) << "Timestamp 8"
+                 << " (rank=" << _local_rank << ")";
   _basic_comm.reset();
   _shm_obj.reset();
   _cpu_reducer.reset();
   _nccl_manager.reset();
-
+  BPS_LOG(DEBUG) << "Timestamp 9"
+                 << " (rank=" << _local_rank << ")";
   // reset state, ignore profiling state
   BPS_LOG(DEBUG) << "Clear BytePS state";
   _threads.clear();
